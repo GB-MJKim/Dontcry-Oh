@@ -1,0 +1,6 @@
+.venv/
+__pycache__/
+.env
+cache/ai_parse_cache.json
+temp/
+*.pyc
