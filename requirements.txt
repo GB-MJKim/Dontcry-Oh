@@ -8,3 +8,4 @@ PyMuPDF==1.26.4
 openai==1.107.1
 python-dotenv==1.1.1
 rapidfuzz==3.14.0
+pillow==11.3.0

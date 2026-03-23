@@ -10,18 +10,16 @@ class PriceSet:
 @dataclass
 class ParsedItem:
     page: int
-    card_index: int
-    pdf_name: str
+    item_index: int
     product_name: str
     spec_text: str
-    body_text: str = ""
     prices: PriceSet = field(default_factory=PriceSet)
+    explicit_discount: bool = False
     discount_rate: Optional[int] = None
     discount_label: Optional[str] = None
-    explicit_discount: bool = False
-    red_text_detected: bool = False
     excluded: bool = False
     exclusion_reason: Optional[str] = None
+    evidence_text: Optional[str] = None
     raw: Dict[str, Any] = field(default_factory=dict)
 
 @dataclass
