@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>검수 결과</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <main class="page">
+    <section class="card">
+      <div class="result-top">
+        <div>
+          <p class="eyebrow">검수 결과</p>
+          <h1>{{ file_name }}</h1>
+          <p class="muted">권역: {{ region }} · AI {{ '활성' if ai_enabled else '비활성' }} · 모델 {{ model_name }}</p>
+        </div>
+        <a href="/" class="ghost-btn">다시 검사</a>
+      </div>
+      <div class="summary-grid">
+        <div class="summary ok"><strong>{{ summary.total }}</strong><span>전체 상품</span></div>
+        <div class="summary good"><strong>{{ summary.ok }}</strong><span>정상</span></div>
+        <div class="summary sale"><strong>{{ summary.discount_applied }}</strong><span>할인적용</span></div>
+        <div class="summary warn"><strong>{{ summary.warning }}</strong><span>확인필요</span></div>
+        <div class="summary error"><strong>{{ summary.error }}</strong><span>오류</span></div>
+      </div>
+    </section>
+
+    <section class="card table-card">
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>페이지</th>
+              <th>검수결과</th>
+              <th>PDF 상품명</th>
+              <th>엑셀 매칭상품</th>
+              <th>규격</th>
+              <th>가격 검수</th>
+              <th>비고</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for r in results %}
+            <tr>
+              <td>{{ r.page_number }}-{{ r.index_on_page }}</td>
+              <td><span class="pill {{ r.status }}">{{ r.status_label }}</span></td>
+              <td>
+                <div class="stack">
+                  <strong>{{ r.product_name_pdf or '-' }}</strong>
+                  <small>매칭 점수 {{ r.matched_score }}</small>
+                </div>
+              </td>
+              <td>{{ r.product_name_master or '-' }}</td>
+              <td>
+                <div class="stack">
+                  <span>PDF: {{ r.spec_pdf or '-' }}</span>
+                  <small>기준: {{ r.spec_master or '-' }}</small>
+                </div>
+              </td>
+              <td>
+                <div class="checks">
+                  {% for check in r.price_checks %}
+                  <div class="check-row {{ check.status }}">
+                    <span class="check-label">{{ check.label }}</span>
+                    <span>PDF <strong>{{ '{:,}'.format(check.pdf_value) if check.pdf_value is not none else '-' }}</strong></span>
+                    <span>기준 <strong>{{ '{:,}'.format(check.expected_value) if check.expected_value is not none else '-' }}</strong></span>
+                  </div>
+                  {% endfor %}
+                </div>
+              </td>
+              <td>
+                {% if r.notes %}
+                <ul class="note-list">
+                  {% for note in r.notes %}
+                  <li>{{ note }}</li>
+                  {% endfor %}
+                </ul>
+                {% else %}
+                -
+                {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

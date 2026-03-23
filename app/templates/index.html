@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ app_name }}</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <main class="page">
+    <section class="hero card">
+      <div>
+        <p class="eyebrow">Local only · Windows · VS Code</p>
+        <h1>{{ app_name }}</h1>
+        <p class="muted">이 앱은 내 PC에서만 실행됩니다. OpenAI API 키는 브라우저가 아니라 로컬 백엔드에서만 사용합니다.</p>
+      </div>
+      <div class="hero-meta">
+        <span class="badge {{ 'success' if ai_enabled else 'warn' }}">AI {{ '활성' if ai_enabled else '비활성' }}</span>
+        <span class="badge">모델: {{ model_name }}</span>
+      </div>
+    </section>
+
+    <section class="card form-card">
+      <h2>검수 시작</h2>
+      <form action="/analyze" method="post" enctype="multipart/form-data" class="form-grid">
+        <label>
+          <span>권역 선택</span>
+          <select name="region" required>
+            {% for region in regions %}
+            <option value="{{ region }}">{{ region }}</option>
+            {% endfor %}
+          </select>
+        </label>
+
+        <label class="file-box">
+          <span>PDF 업로드</span>
+          <input type="file" name="pdf_file" accept="application/pdf" required>
+          <small>육가공, 떡, 베이커리처럼 상품 카드가 배치된 PDF를 업로드하세요.</small>
+        </label>
+
+        <button type="submit" class="primary">검수 실행</button>
+      </form>
+    </section>
+
+    <section class="card tips">
+      <h2>최적화 포인트</h2>
+      <ul>
+        <li>PDF 전체가 아니라 상품 카드 단위로 잘라서 AI 토큰 사용량을 줄입니다.</li>
+        <li>비교 자체는 코드로 처리하고, AI는 상품 정보 추출에 집중합니다.</li>
+        <li>같은 카드 이미지는 캐시에 저장되어 재검수 시 비용과 시간이 줄어듭니다.</li>
+      </ul>
+    </section>
+  </main>
+</body>
+</html>
