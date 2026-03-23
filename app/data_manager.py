@@ -1,3 +1,4 @@
+import re
 import os
 import shutil
 import pandas as pd
@@ -66,8 +67,15 @@ def get_field_map(df: pd.DataFrame) -> Dict[str, Optional[str]]:
 def clean_product_name(name: str) -> str:
     if not isinstance(name, str):
         name = str(name)
-    return (name.replace("\n", " ").replace("(냉동)", "").replace("(상온)", "")
-            .replace("(생지)", "").replace("  ", " ").strip())
+    s = (name.replace("\n", " ").replace("(냉동)", "").replace("(상온)", "")
+         .replace("(생지)", "").replace("  ", " ").strip())
+    s = re.sub(r"부재료.*", "", s)
+    s = re.sub(r"꼼꼼히.*", "", s)
+    s = re.sub(r"확인합니다.*", "", s)
+    s = re.sub(r"6월\s*sale.*", "", s, flags=re.I)
+    s = re.sub(r"\d+\s*%", "", s)
+    s = re.sub(r"\s+", " ", s).strip(" -/·,")
+    return s
 
 def find_best_match(df: pd.DataFrame, query: str) -> Tuple[Optional[dict], float]:
     if df.empty:
