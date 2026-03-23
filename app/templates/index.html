@@ -2,54 +2,144 @@
 <html lang="ko">
 <head>
   <meta charset="utf-8">
+  <title>로컬 가격검수 서비스</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{{ app_name }}</title>
-  <link rel="stylesheet" href="/static/style.css">
+  <link href="/static/style.css" rel="stylesheet">
 </head>
 <body>
-  <main class="page">
-    <section class="hero card">
-      <div>
-        <p class="eyebrow">Local only · Windows · VS Code</p>
-        <h1>{{ app_name }}</h1>
-        <p class="muted">이 앱은 내 PC에서만 실행됩니다. OpenAI API 키는 브라우저가 아니라 로컬 백엔드에서만 사용합니다.</p>
+<div class="container">
+  <div class="topbar">
+    <div>
+      <h1>로컬 가격검수 서비스</h1>
+      <p class="sub">PDF를 업로드해 권역별 기준 가격과 비교합니다.</p>
+    </div>
+    <button class="btn secondary" onclick="openModal()">데이터 관리</button>
+  </div>
+
+  <div class="card">
+    <form method="post" action="/inspect" enctype="multipart/form-data" class="inspect-form">
+      <div class="field">
+        <label>권역 선택</label>
+        <select name="region" required>
+          {% for region in regions %}
+          <option value="{{ region }}" {% if selected_region == region %}selected{% endif %}>{{ region }}</option>
+          {% endfor %}
+        </select>
       </div>
-      <div class="hero-meta">
-        <span class="badge {{ 'success' if ai_enabled else 'warn' }}">AI {{ '활성' if ai_enabled else '비활성' }}</span>
-        <span class="badge">모델: {{ model_name }}</span>
+      <div class="field grow">
+        <label>PDF 업로드</label>
+        <input type="file" name="pdf_file" accept=".pdf" required>
       </div>
-    </section>
+      <div class="actions">
+        <button class="btn primary" type="submit">검수 실행</button>
+      </div>
+    </form>
+    {% if uploaded_pdf_name %}
+    <div class="hint">업로드 파일: {{ uploaded_pdf_name }}</div>
+    {% endif %}
+  </div>
 
-    <section class="card form-card">
-      <h2>검수 시작</h2>
-      <form action="/analyze" method="post" enctype="multipart/form-data" class="form-grid">
-        <label>
-          <span>권역 선택</span>
-          <select name="region" required>
-            {% for region in regions %}
-            <option value="{{ region }}">{{ region }}</option>
-            {% endfor %}
-          </select>
-        </label>
+  <div class="stats">
+    <div class="stat">
+      <div class="label">기준 데이터</div>
+      <div class="value">{{ master_count }}건</div>
+    </div>
+    {% if results %}
+    <div class="stat"><div class="label">정상</div><div class="value">{{ results|selectattr("status","equalto","정상")|list|length }}</div></div>
+    <div class="stat"><div class="label">오류</div><div class="value danger">{{ results|selectattr("status","equalto","오류")|list|length }}</div></div>
+    <div class="stat"><div class="label">할인적용</div><div class="value warn">{{ results|selectattr("status","equalto","할인적용")|list|length }}</div></div>
+    <div class="stat"><div class="label">제외</div><div class="value">{{ results|selectattr("status","equalto","제외")|list|length }}</div></div>
+    {% endif %}
+  </div>
 
-        <label class="file-box">
-          <span>PDF 업로드</span>
-          <input type="file" name="pdf_file" accept="application/pdf" required>
-          <small>육가공, 떡, 베이커리처럼 상품 카드가 배치된 PDF를 업로드하세요.</small>
-        </label>
+  {% if results %}
+  <div class="results">
+    {% for row in results %}
+    <div class="result-card status-{{ 'error' if row.status == '오류' else 'discount' if row.status == '할인적용' else 'excluded' if row.status == '제외' else 'ok' }}">
+      <div class="left">
+        <div class="index">{{ row.index }}</div>
+        <div class="pill pill-{{ 'error' if row.status == '오류' else 'discount' if row.status == '할인적용' else 'excluded' if row.status == '제외' else 'ok' }}">{{ row.status }}</div>
+      </div>
+      <div class="main">
+        <div class="names">
+          <div class="pdf-name">{{ row.product_name_pdf }}</div>
+          <div class="master-name">{{ row.product_name_master or '-' }}</div>
+          <div class="score">매칭 점수 {{ "%.1f"|format(row.match_score) }}</div>
+        </div>
 
-        <button type="submit" class="primary">검수 실행</button>
-      </form>
-    </section>
+        <div class="specs">
+          <div>PDF: {{ row.pdf_spec or '-' }}</div>
+          <div>기준: {{ row.master_spec or '-' }}</div>
+        </div>
 
-    <section class="card tips">
-      <h2>최적화 포인트</h2>
-      <ul>
-        <li>PDF 전체가 아니라 상품 카드 단위로 잘라서 AI 토큰 사용량을 줄입니다.</li>
-        <li>비교 자체는 코드로 처리하고, AI는 상품 정보 추출에 집중합니다.</li>
-        <li>같은 카드 이미지는 캐시에 저장되어 재검수 시 비용과 시간이 줄어듭니다.</li>
-      </ul>
-    </section>
-  </main>
+        <div class="price-grid">
+          <div class="price-box {{ 'errorbox' if row.status == '오류' and row.pdf_prices.spec_price != row.master_prices.spec_price else '' }}">
+            <div class="title">규격단가</div>
+            <div>PDF <span class="{{ 'error-text' if row.status == '오류' and row.pdf_prices.spec_price != row.master_prices.spec_price else 'value-text' }}">{{ "{:,}".format(row.pdf_prices.spec_price) if row.pdf_prices.spec_price is not none else '-' }}</span></div>
+            <div>기준 <span class="{{ 'error-text' if row.status == '오류' and row.pdf_prices.spec_price != row.master_prices.spec_price else 'value-text' }}">{{ "{:,}".format(row.master_prices.spec_price) if row.master_prices.spec_price is not none else '-' }}</span></div>
+          </div>
+          <div class="price-box {{ 'errorbox' if row.status == '오류' and row.pdf_prices.kg_price != row.master_prices.kg_price and row.master_prices.kg_price is not none else '' }}">
+            <div class="title">KG단가</div>
+            <div>PDF <span class="{{ 'error-text' if row.status == '오류' and row.pdf_prices.kg_price != row.master_prices.kg_price and row.master_prices.kg_price is not none else 'value-text' }}">{{ "{:,}".format(row.pdf_prices.kg_price) if row.pdf_prices.kg_price is not none else '-' }}</span></div>
+            <div>기준 <span class="{{ 'error-text' if row.status == '오류' and row.pdf_prices.kg_price != row.master_prices.kg_price and row.master_prices.kg_price is not none else 'value-text' }}">{{ "{:,}".format(row.master_prices.kg_price) if row.master_prices.kg_price is not none else '-' }}</span></div>
+          </div>
+          <div class="price-box {{ 'errorbox' if row.status == '오류' and row.pdf_prices.unit_price != row.master_prices.unit_price and row.master_prices.unit_price is not none else '' }}">
+            <div class="title">개당단가</div>
+            <div>PDF <span class="{{ 'error-text' if row.status == '오류' and row.pdf_prices.unit_price != row.master_prices.unit_price and row.master_prices.unit_price is not none else 'value-text' }}">{{ "{:,}".format(row.pdf_prices.unit_price) if row.pdf_prices.unit_price is not none else '-' }}</span></div>
+            <div>기준 <span class="{{ 'error-text' if row.status == '오류' and row.pdf_prices.unit_price != row.master_prices.unit_price and row.master_prices.unit_price is not none else 'value-text' }}">{{ "{:,}".format(row.master_prices.unit_price) if row.master_prices.unit_price is not none else '-' }}</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="notes">
+        <ul>
+          {% for note in row.notes %}
+          <li>{{ note }}</li>
+          {% endfor %}
+        </ul>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+</div>
+
+<div class="modal" id="dataModal">
+  <div class="modal-overlay" onclick="closeModal()"></div>
+  <div class="modal-content">
+    <div class="modal-head">
+      <h2>데이터 관리</h2>
+      <button class="icon-btn" onclick="closeModal()">✕</button>
+    </div>
+    <form method="post" action="/data/upload" enctype="multipart/form-data" class="data-upload-form">
+      <input type="file" name="file" accept=".xlsx,.xls" required>
+      <button class="btn primary" type="submit">엑셀 업로드</button>
+    </form>
+    <div class="table-wrap">
+      <table>
+        <thead>
+        <tr>
+          {% for col in columns %}
+          <th>{{ col }}</th>
+          {% endfor %}
+        </tr>
+        </thead>
+        <tbody>
+        {% for row in rows %}
+          <tr>
+          {% for col in columns %}
+            <td>{{ row[col] }}</td>
+          {% endfor %}
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script>
+function openModal(){ document.getElementById('dataModal').classList.add('open'); }
+function closeModal(){ document.getElementById('dataModal').classList.remove('open'); }
+</script>
 </body>
 </html>

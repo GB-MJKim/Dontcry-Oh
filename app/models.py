@@ -1,61 +1,38 @@
-from __future__ import annotations
-
 from dataclasses import dataclass, field
-from typing import Any
-
-
-@dataclass
-class MasterRow:
-    code: str
-    name: str
-    spec: str
-    normalized_name: str
-    normalized_spec: str
-    prices: dict[str, dict[str, float | None]]
-
+from typing import Optional, List, Dict, Any
 
 @dataclass
-class PdfCard:
-    page_number: int
-    index_on_page: int
-    bbox: tuple[float, float, float, float]
-    raw_text: str
-    image_path: str
-    red_text_count: int
-    extracted_numbers: list[str] = field(default_factory=list)
-
+class PriceSet:
+    spec_price: Optional[int] = None
+    kg_price: Optional[int] = None
+    unit_price: Optional[int] = None
 
 @dataclass
-class ParsedProduct:
-    page_number: int
-    index_on_page: int
-    product_name: str = ''
-    spec: str = ''
-    regular_price: int | None = None
-    kg_price: int | None = None
-    unit_price: int | None = None
-    discount_price: int | None = None
-    discount_rate_percent: float | None = None
-    has_red_price: bool = False
-    has_discount_text: bool = False
-    discount_notes: str = ''
-    raw_text: str = ''
-    parser_source: str = 'rule'
-    parse_confidence: float = 0.0
-
+class ParsedItem:
+    page: int
+    card_index: int
+    pdf_name: str
+    product_name: str
+    spec_text: str
+    body_text: str = ""
+    prices: PriceSet = field(default_factory=PriceSet)
+    discount_rate: Optional[int] = None
+    discount_label: Optional[str] = None
+    explicit_discount: bool = False
+    red_text_detected: bool = False
+    excluded: bool = False
+    exclusion_reason: Optional[str] = None
+    raw: Dict[str, Any] = field(default_factory=dict)
 
 @dataclass
-class ComparisonResult:
-    page_number: int
-    index_on_page: int
-    region: str
+class InspectionRow:
+    index: int
     status: str
-    status_label: str
     product_name_pdf: str
-    product_name_master: str
-    spec_pdf: str
-    spec_master: str
-    matched_score: float
-    price_checks: list[dict[str, Any]]
-    notes: list[str] = field(default_factory=list)
-    parser_source: str = 'rule'
+    product_name_master: Optional[str]
+    match_score: float
+    pdf_spec: str
+    master_spec: Optional[str]
+    pdf_prices: Dict[str, Optional[int]]
+    master_prices: Dict[str, Optional[int]]
+    notes: List[str]

@@ -1,81 +1,68 @@
-from __future__ import annotations
-
-from pathlib import Path
-from datetime import datetime
-import shutil
-import os
-
-from fastapi import FastAPI, File, Form, Request, UploadFile
-from fastapi.responses import HTMLResponse, RedirectResponse
+import os, tempfile, shutil
+from fastapi import FastAPI, Request, UploadFile, File, Form
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from .settings import TEMP_DIR
+from . import data_manager
+from .pdf_parser import parse_pdf
+from .ai_parser import maybe_refine_item_with_ai
+from .comparator import compare_items
 
-from .config import settings
-from .excel_matcher import MasterCatalog
-from .pdf_cropper import detect_cards
-from .ai_parser import AIProductParser
-from .comparison import compare_products
+app = FastAPI(title="로컬 가격검수 서비스")
+templates = Jinja2Templates(directory=os.path.join(os.path.dirname(__file__), "templates"))
+app.mount("/static", StaticFiles(directory=os.path.join(os.path.dirname(__file__), "static")), name="static")
 
-BASE_DIR = Path(__file__).resolve().parent.parent
-app = FastAPI(title=settings.app_name)
-app.mount('/static', StaticFiles(directory=str(BASE_DIR / 'app' / 'static')), name='static')
-templates = Jinja2Templates(directory=str(BASE_DIR / 'app' / 'templates'))
+REGIONS = ["수도권", "경상권", "경남부산", "호남권"]
 
-catalog = MasterCatalog(settings.master_excel_path)
-ai_parser = AIProductParser()
-
-
-@app.get('/', response_class=HTMLResponse)
-async def home(request: Request):
-    return templates.TemplateResponse('index.html', {
-        'request': request,
-        'app_name': settings.app_name,
-        'regions': ['수도권', '경상권', '경남 부산', '호남권'],
-        'model_name': settings.openai_model,
-        'ai_enabled': ai_parser.enabled,
+@app.get("/", response_class=HTMLResponse)
+def index(request: Request):
+    df = data_manager.load_master_df()
+    summary = data_manager.summarize_master_df(df)
+    return templates.TemplateResponse("index.html", {
+        "request": request,
+        "regions": REGIONS,
+        "master_count": summary["count"],
+        "columns": summary["columns"],
+        "rows": summary["rows"][:30],
+        "results": None,
     })
 
+@app.post("/inspect", response_class=HTMLResponse)
+async def inspect_pdf(request: Request, region: str = Form(...), pdf_file: UploadFile = File(...)):
+    os.makedirs(TEMP_DIR, exist_ok=True)
+    tmp_path = os.path.join(TEMP_DIR, pdf_file.filename)
+    with open(tmp_path, "wb") as f:
+        f.write(await pdf_file.read())
 
-@app.get('/healthz')
-async def healthz():
-    return {
-        'ok': True,
-        'time': datetime.now().isoformat(timespec='seconds'),
-        'ai_enabled': ai_parser.enabled,
-        'model': settings.openai_model,
-        'master_excel': str(settings.master_excel_path),
-    }
+    master_df = data_manager.load_master_df()
+    items = parse_pdf(tmp_path)
+    refined = [maybe_refine_item_with_ai(item) for item in items]
+    results = compare_items(refined, master_df, region)
+    summary = data_manager.summarize_master_df(master_df)
 
-
-@app.post('/analyze', response_class=HTMLResponse)
-async def analyze(request: Request, region: str = Form(...), pdf_file: UploadFile = File(...)):
-    run_id = datetime.now().strftime('%Y%m%d_%H%M%S')
-    run_dir = settings.temp_dir / run_id
-    run_dir.mkdir(parents=True, exist_ok=True)
-    pdf_path = run_dir / pdf_file.filename
-    with open(pdf_path, 'wb') as f:
-        shutil.copyfileobj(pdf_file.file, f)
-
-    cards = detect_cards(pdf_path, run_dir / 'cards')
-    parsed = ai_parser.parse_cards(cards)
-    results = compare_products(parsed, catalog, region)
-
-    summary = {
-        'total': len(results),
-        'ok': sum(1 for r in results if r.status == 'ok'),
-        'discount_applied': sum(1 for r in results if r.status == 'discount_applied'),
-        'warning': sum(1 for r in results if r.status == 'warning'),
-        'error': sum(1 for r in results if r.status == 'error'),
-    }
-
-    return templates.TemplateResponse('result.html', {
-        'request': request,
-        'app_name': settings.app_name,
-        'file_name': pdf_file.filename,
-        'region': region,
-        'summary': summary,
-        'results': results,
-        'run_id': run_id,
-        'ai_enabled': ai_parser.enabled,
-        'model_name': settings.openai_model,
+    return templates.TemplateResponse("index.html", {
+        "request": request,
+        "regions": REGIONS,
+        "master_count": summary["count"],
+        "columns": summary["columns"],
+        "rows": summary["rows"][:30],
+        "results": results,
+        "selected_region": region,
+        "uploaded_pdf_name": pdf_file.filename,
     })
+
+@app.post("/data/upload")
+async def upload_master(file: UploadFile = File(...)):
+    fd, tmp = tempfile.mkstemp(suffix=".xlsx")
+    os.close(fd)
+    with open(tmp, "wb") as f:
+        f.write(await file.read())
+    data_manager.save_master_excel(tmp)
+    os.remove(tmp)
+    return RedirectResponse(url="/", status_code=303)
+
+@app.get("/data/json")
+def data_json():
+    df = data_manager.load_master_df()
+    return JSONResponse(data_manager.summarize_master_df(df))
