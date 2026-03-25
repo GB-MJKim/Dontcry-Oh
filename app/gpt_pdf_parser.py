@@ -42,11 +42,7 @@ def parse_pdf_with_gpt(pdf_path: str) -> List[ParsedItem]:
         raise RuntimeError("OPENAI_API_KEY가 설정되지 않았습니다.")
     client = OpenAI(api_key=OPENAI_API_KEY)
     with open(pdf_path, "rb") as f:
-        uploaded = client.files.create(
-            file=f,
-            purpose="user_data",
-            expires_after={"anchor": "created_at", "seconds": OPENAI_FILE_EXPIRE_SECONDS},
-        )
+        uploaded = client.files.create(file=f, purpose="user_data", expires_after={"anchor": "created_at", "seconds": OPENAI_FILE_EXPIRE_SECONDS})
     response = client.responses.create(
         model=OPENAI_MODEL,
         input=[
@@ -60,18 +56,5 @@ def parse_pdf_with_gpt(pdf_path: str) -> List[ParsedItem]:
     data = _extract_json(output_text)
     parsed = []
     for idx, item in enumerate(data.get("items", []), start=1):
-        parsed.append(ParsedItem(
-            page=int(item.get("page") or 1),
-            item_index=int(item.get("item_index") or idx),
-            product_name=str(item.get("product_name") or "").strip(),
-            spec_text=str(item.get("spec_text") or "").strip(),
-            prices=PriceSet(spec_price=_to_int(item.get("spec_price")), kg_price=_to_int(item.get("kg_price")), unit_price=_to_int(item.get("unit_price"))),
-            explicit_discount=bool(item.get("explicit_discount", False)),
-            discount_rate=_to_int(item.get("discount_rate")),
-            discount_label=(str(item.get("discount_label")).strip() if item.get("discount_label") is not None else None),
-            excluded=bool(item.get("excluded", False)),
-            exclusion_reason=(str(item.get("exclusion_reason")).strip() if item.get("exclusion_reason") is not None else None),
-            evidence_text=(str(item.get("evidence_text")).strip() if item.get("evidence_text") is not None else None),
-            raw=item,
-        ))
+        parsed.append(ParsedItem(page=int(item.get("page") or 1), item_index=int(item.get("item_index") or idx), product_name=str(item.get("product_name") or "").strip(), spec_text=str(item.get("spec_text") or "").strip(), prices=PriceSet(spec_price=_to_int(item.get("spec_price")), kg_price=_to_int(item.get("kg_price")), unit_price=_to_int(item.get("unit_price"))), explicit_discount=bool(item.get("explicit_discount", False)), discount_rate=_to_int(item.get("discount_rate")), discount_label=(str(item.get("discount_label")).strip() if item.get("discount_label") is not None else None), excluded=bool(item.get("excluded", False)), exclusion_reason=(str(item.get("exclusion_reason")).strip() if item.get("exclusion_reason") is not None else None), evidence_text=(str(item.get("evidence_text")).strip() if item.get("evidence_text") is not None else None), raw=item))
     return parsed

@@ -1,6 +1,6 @@
 :root{--bg:#f6f7fb;--card:#ffffff;--text:#1d2433;--muted:#6f7785;--line:#e7eaf0;--primary:#f08a24;--danger:#d64045;--warn:#ea7b17;--ok:#2d8a5f}
 *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--text);font-family:Segoe UI,Arial,sans-serif}
-.container{max-width:1240px;margin:0 auto;padding:24px}
+.container{max-width:1260px;margin:0 auto;padding:24px}
 .topbar{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;margin-bottom:16px}
 h1{margin:0 0 6px;font-size:28px}.sub{margin:0;color:var(--muted)}
 .card,.stat,.result-card,.modal-content,.mapping-box{background:var(--card);border:1px solid var(--line);border-radius:18px;box-shadow:0 6px 18px rgba(22,27,45,.04)}
@@ -15,9 +15,11 @@ input[type=file],select{background:#fff;border:1px solid var(--line);border-radi
 .stats{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin:16px 0}.stat{padding:14px 16px}.stat .label{color:var(--muted);font-size:13px}.stat .value{font-size:24px;font-weight:700;margin-top:4px}.stat .value.danger{color:var(--danger)}.stat .value.warn{color:var(--warn)}
 .results{display:flex;flex-direction:column;gap:14px}.result-card{display:grid;grid-template-columns:90px 1fr 320px;gap:16px;padding:16px}.left{display:flex;flex-direction:column;align-items:center;gap:10px}.index{font-size:24px;font-weight:700}
 .pill{padding:10px 14px;border-radius:999px;font-weight:700}.pill-ok{background:#eef8f2;color:var(--ok);border:1px solid #cfe8da}.pill-error{background:#fff1f1;color:var(--danger);border:1px solid #f1c3c5}.pill-discount{background:#fff5e9;color:var(--warn);border:1px solid #f4d0a6}.pill-excluded{background:#f2f4f8;color:#6f7785;border:1px solid #d9dee8}
-.names{display:grid;grid-template-columns:1.2fr 1.2fr .6fr;gap:12px;margin-bottom:8px}.pdf-name,.master-name{font-weight:700;font-size:22px;word-break:keep-all}.master-name{color:#2b4b74}.score{align-self:end;color:var(--muted)}
-.specs{display:flex;gap:24px;color:#384456;margin-bottom:12px}.price-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}.price-box{padding:14px;border:1px solid var(--line);border-radius:16px;background:#fafbfe}.price-box .title{font-weight:700;margin-bottom:8px}.value-text{font-weight:700;color:#cb7210}.errorbox{border-color:#efb0b4;background:#fff6f7}.error-text{font-weight:800;color:var(--danger)}
+.pdf-title{font-weight:800;font-size:24px;margin-bottom:8px;word-break:keep-all}
+.meta-lines{display:grid;grid-template-columns:repeat(2,1fr);gap:6px 16px;color:#42516c;margin-bottom:10px}
+.specs{display:flex;gap:24px;color:#384456;margin-bottom:12px}
+.price-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}.price-box{padding:14px;border:1px solid var(--line);border-radius:16px;background:#fafbfe}.price-box .title{font-weight:700;margin-bottom:8px}.value-text{font-weight:700;color:#cb7210}.errorbox{border-color:#efb0b4;background:#fff6f7}.error-text{font-weight:800;color:var(--danger)}
 .notes{padding-top:6px}.notes ul{margin:0;padding-left:18px;color:#3d4b62}.notes li{margin:0 0 8px}
 .modal{display:none}.modal.open{display:block}.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.38)}.modal-content{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);width:min(1100px,92vw);max-height:86vh;overflow:auto;padding:18px}.modal-head{display:flex;justify-content:space-between;align-items:center}.icon-btn{border:none;background:none;font-size:22px;cursor:pointer}.data-upload-form{display:flex;gap:12px;align-items:center;margin:8px 0 16px}
-@media (max-width:1024px){.result-card{grid-template-columns:1fr}.left{flex-direction:row;justify-content:flex-start}.names{grid-template-columns:1fr}.price-grid{grid-template-columns:1fr}.stats{grid-template-columns:repeat(2,1fr)}}
-@media (max-width:640px){.container{padding:14px}.inspect-form{flex-direction:column;align-items:stretch}.stats{grid-template-columns:1fr}.mapping-grid{grid-template-columns:1fr}.pdf-name,.master-name{font-size:18px}}
+@media (max-width:1024px){.result-card{grid-template-columns:1fr}.left{flex-direction:row;justify-content:flex-start}.price-grid{grid-template-columns:1fr}.stats{grid-template-columns:repeat(2,1fr)}.meta-lines{grid-template-columns:1fr}}
+@media (max-width:640px){.container{padding:14px}.inspect-form{flex-direction:column;align-items:stretch}.stats{grid-template-columns:1fr}.mapping-grid{grid-template-columns:1fr}.pdf-title{font-size:20px}}

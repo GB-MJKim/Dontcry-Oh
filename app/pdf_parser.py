@@ -1,252 +1,418 @@
-import fitz
+import json
 import re
-from typing import List, Dict, Any, Optional
+from pathlib import Path
+from typing import Dict, List, Optional, Tuple
+
+import fitz
+from rapidfuzz import fuzz
+
+from . import data_manager
 from .models import ParsedItem, PriceSet
+from .settings import OPENAI_API_KEY, OPENAI_MODEL, OPENAI_TIMEOUT_SECONDS, PDF_TEXT_SNIPPET_LIMIT, TEMP_DIR
 
-EXCLUSION_KEYWORDS = ["증정", "사은품", "무료", "세트상품"]
-SPEC_RE = re.compile(r"(\d+(?:\.\d+)?)\s*(kg|g|ml|l)\b", re.I)
-PRICE_NUM_RE = re.compile(r"(?<!\d)(\d{1,3}(?:,\d{3})+|\d{3,6})(?!\d)")
-TITLE_NOISE_PATTERNS = [
-    r"부재료.*", r"꼼꼼히.*", r"확인합니다.*", r"국산 통팥앙금.*",
-    r"국산 무화과잼.*", r"국산 유정란.*", r"6월\s*sale.*", r"\d+\s*%.*",
-]
+try:
+    from openai import OpenAI
+except Exception:
+    OpenAI = None
 
-def _color_rgb_tuple(color_int: int):
-    r = (color_int >> 16) & 255
-    g = (color_int >> 8) & 255
-    b = color_int & 255
-    return r, g, b
 
-def is_red_like(color_int: int) -> bool:
-    if not color_int:
-        return False
-    r, g, b = _color_rgb_tuple(color_int)
-    return r > 140 and r > g + 20 and r > b + 20
+SYSTEM_PROMPT = """
+너는 학교 홍보북 PDF에서 상품 정보를 추출하는 검수 보조 모델이다.
+반드시 JSON만 반환한다.
+각 target은 이미 상품명이 주어져 있다. target의 excerpt_text 안에서만 찾아라.
+추출 기준:
+- ingredient_content: 원재료명 또는 함량 정보. % 수치가 보이면 포함한다. 없으면 null.
+- spec_text: 규격 텍스트. 예: 1kg, 1kg(약 55개), 800g(40gX20개) 등.
+- spec_price: 규격단가 숫자만. 없으면 null.
+- kg_price: KG단가 숫자만. 없으면 null.
+- unit_price: 개당단가 숫자만. 없으면 null.
+- confidence: 0~1 실수.
+주의:
+- 숫자는 쉼표 없이 정수로 반환한다.
+- 할인/행사 원가와 할인가가 같이 있으면 현재 표시된 실제 판매가를 우선한다.
+- 불확실하면 추정하지 말고 null을 사용한다.
+응답 형식:
+{"items":[{"id":"...","ingredient_content":null,"spec_text":null,"spec_price":null,"kg_price":null,"unit_price":null,"confidence":0.0,"evidence":"짧은 근거"}]}
+""".strip()
 
-def clean_text(s: str) -> str:
-    return re.sub(r"\s+", " ", s).strip()
 
-def normalize_product_name(name: str) -> str:
-    s = clean_text(name)
-    s = s.replace("(냉동)", "").replace("(상온)", "").replace("(생지)", "")
-    for pat in TITLE_NOISE_PATTERNS:
-        s = re.sub(pat, "", s, flags=re.I)
-    s = re.sub(r"\bSALE\b", "", s, flags=re.I)
-    s = re.sub(r"\d+\s*%", "", s)
-    s = re.sub(r"\s+", " ", s).strip(" -/·,")
-    return s
+def _safe_int(value) -> Optional[int]:
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        try:
+            return int(round(float(value)))
+        except Exception:
+            return None
+    s = str(value).strip()
+    if not s or s.lower() in {"null", "none", "nan", "-"}:
+        return None
+    s = s.replace(",", "")
+    digits = re.findall(r"\d+", s)
+    if not digits:
+        return None
+    try:
+        return int("".join(digits))
+    except Exception:
+        return None
 
-def _collect_spans(page) -> List[Dict[str, Any]]:
-    data = page.get_text("dict")
-    spans = []
-    for b in data.get("blocks", []):
-        if "lines" not in b:
+
+def _clean_text(text: str) -> str:
+    return re.sub(r"\s+", " ", (text or "").replace("\x00", " ")).strip()
+
+
+def _clip_text(text: str, limit: int = PDF_TEXT_SNIPPET_LIMIT) -> str:
+    text = _clean_text(text)
+    if len(text) <= limit:
+        return text
+    return text[:limit] + " …"
+
+
+def prepare_pdf_for_ai(input_pdf_path: str) -> str:
+    """
+    AI에는 PDF 바이너리 대신 텍스트 레이어만 전달한다.
+    별도로 최적화 복사본 PDF를 만들어 보관하지만, 실제 텍스트 추출은 원본 PDF에서 수행한다.
+    일부 파일은 이미지/도형 제거 시 텍스트가 훼손될 수 있어, 여기서는 안전한 압축만 적용한다.
+    """
+    src = fitz.open(input_pdf_path)
+    out_path = Path(TEMP_DIR) / f"{Path(input_pdf_path).stem}_optimized.pdf"
+    src.save(str(out_path), garbage=4, deflate=True, clean=True)
+    src.close()
+    return str(out_path)
+
+
+def _name_similarity(line: str, row: dict) -> float:
+    qcands = data_manager.name_candidates(line)
+    best = 0.0
+    for qc in qcands:
+        for rc in row.get("name_candidates", []):
+            score = float(max(
+                fuzz.WRatio(qc, rc),
+                fuzz.token_sort_ratio(qc, rc),
+                95.0 if qc and rc and min(len(qc), len(rc)) >= 6 and (qc in rc or rc in qc) else 0.0,
+            ))
+            best = max(best, score)
+    return best
+
+
+def _best_title_line(lines: List[str], catalog_rows: List[dict]) -> Tuple[str, Optional[dict], float]:
+    best_line = ""
+    best_row = None
+    best_score = 0.0
+    skip_tokens = [
+        "보관", "알러지", "원재료", "조리", "규격단가", "개당", "오븐", "튀김", "콤비", "모드",
+        "kg단가", "KG단가", "규격", "단가", "kg", "KG", "원산지", "함량", "대두", "밀:", "국산)",
+    ]
+    for line in lines:
+        line = line.strip()
+        if not line:
             continue
-        for ln in b["lines"]:
-            for sp in ln["spans"]:
-                txt = clean_text(sp.get("text", ""))
-                if not txt:
-                    continue
-                spans.append({
-                    "text": txt,
-                    "bbox": sp["bbox"],
-                    "color": sp.get("color", 0),
-                    "size": sp.get("size", 0),
-                    "font": sp.get("font", ""),
-                })
-    return spans
-
-def _guess_card_tops(spans: List[Dict[str, Any]]) -> List[float]:
-    ys = []
-    for sp in spans:
-        if SPEC_RE.search(sp["text"]):
-            y = sp["bbox"][1]
-            if y > 320:
-                ys.append(y)
-    ys = sorted(ys)
-    groups = []
-    for y in ys:
-        if not groups or abs(y - groups[-1]) > 120:
-            groups.append(y)
-    return groups
-
-def _card_bounds(page_rect, card_tops: List[float]) -> List[tuple]:
-    xs = [(145, 306), (420, 580)]
-    bounds = []
-    used = []
-    for y in sorted(card_tops):
-        y0 = y - 35
-        if used and abs(y0 - used[-1][0]) < 80:
+        if len(line) < 3 or len(line) > 40:
             continue
-        used.append((y0, y0 + 135))
-    for y0, y1 in used:
-        for x0, x1 in xs:
-            bounds.append((x0, y0, x1, y1))
-    return bounds
-
-def _spans_in_rect(spans, rect):
-    x0, y0, x1, y1 = rect
-    out = []
-    for sp in spans:
-        sx0, sy0, sx1, sy1 = sp["bbox"]
-        cx, cy = (sx0 + sx1) / 2, (sy0 + sy1) / 2
-        if x0 <= cx <= x1 and y0 <= cy <= y1:
-            out.append(sp)
-    return out
-
-def _looks_like_name_line(text: str) -> bool:
-    t = clean_text(text)
-    if len(t) < 2:
-        return False
-    if any(k in t for k in ["규격단가", "KG단가", "개당단가", "기준", "PDF", "보관", "알레르기", "오븐", "에어프라이어"]):
-        return False
-    if re.search(r"\d", t) and any(u in t.lower() for u in ["kg", "g", "ml", "l", "x"]):
-        return False
-    return True
-
-def _extract_product_name(card_spans: List[Dict[str, Any]]) -> str:
-    if not card_spans:
-        return ""
-    y_min = min(sp["bbox"][1] for sp in card_spans)
-    x_min = min(sp["bbox"][0] for sp in card_spans)
-    title_zone = []
-    for sp in card_spans:
-        x0, y0, x1, y1 = sp["bbox"]
-        txt = sp["text"]
-        if not _looks_like_name_line(txt):
+        if line.endswith(".") or line.endswith("다.") or line.endswith("요."):
             continue
-        if y0 > y_min + 42:
+        if line in {"냉동", "냉장", "상온"}:
             continue
-        if x0 > x_min + 65:
+        if "%" in line:
             continue
-        score = sp["size"] * 10
-        if "Bold" in sp.get("font", ""):
-            score += 10
-        if len(txt) > 18:
-            score -= 8
-        if is_red_like(sp["color"]):
-            score -= 5
-        title_zone.append((score, y0, x0, txt, sp["size"]))
-    if not title_zone:
-        fallback = [sp for sp in card_spans if _looks_like_name_line(sp["text"])]
-        fallback = sorted(fallback, key=lambda x: (x["bbox"][1], x["bbox"][0]))
-        return normalize_product_name(" ".join(sp["text"] for sp in fallback[:2]))
-    title_zone = sorted(title_zone, key=lambda x: (-x[0], x[1], x[2]))
-    best = title_zone[0]
-    lines = [best]
-    base_y, base_size = best[1], best[4]
-    for cand in sorted(title_zone[1:], key=lambda x: (x[1], x[2])):
-        if abs(cand[1] - base_y) <= 18 and abs(cand[4] - base_size) <= 2.5:
-            if cand[3] not in [l[3] for l in lines]:
-                lines.append(cand)
-        elif 0 < cand[1] - base_y <= 20 and abs(cand[2] - best[2]) <= 15 and abs(cand[4] - base_size) <= 2.5:
-            if cand[3] not in [l[3] for l in lines]:
-                lines.append(cand)
-    lines = sorted(lines, key=lambda x: (x[1], x[2]))
-    return normalize_product_name(" ".join(l[3] for l in lines[:2]))
+        if "/" in line and "(" not in line:
+            continue
+        if line.count(",") >= 1:
+            continue
+        if any(token in line for token in skip_tokens):
+            continue
+        if re.search(r"\d{2,}", line) and "(" not in line:
+            continue
+        for row in catalog_rows:
+            score = _name_similarity(line, row)
+            if score > best_score:
+                best_line = line
+                best_row = row
+                best_score = score
+    return best_line, best_row, best_score
 
-def _extract_spec(card_spans):
-    candidates = []
-    for sp in sorted(card_spans, key=lambda x: x["bbox"][1]):
-        if SPEC_RE.search(sp["text"]):
-            candidates.append(sp["text"])
-    return candidates[0] if candidates else ""
 
-def _extract_prices(card_spans):
-    nums = []
-    for sp in card_spans:
-        t = sp["text"]
-        for m in PRICE_NUM_RE.finditer(t):
-            value = int(m.group(1).replace(",", ""))
-            if 100 <= value <= 999999:
-                nums.append((sp["bbox"][1], sp["bbox"][0], value, t, sp["color"]))
-    nums = sorted(nums)
-    spec_price = kg_price = unit_price = None
-    for y, x, value, txt, color in nums:
-        if "PDF" in txt and value < 1000 and "," not in txt:
-            continue
-        if 150 <= x <= 210 and spec_price is None:
-            spec_price = value
-        elif 195 < x <= 245 and kg_price is None:
-            kg_price = value
-        elif x > 255 and unit_price is None:
-            unit_price = value
-    ordered = [v for _, _, v, _, _ in nums if v >= 100]
-    if spec_price is None and len(ordered) >= 1:
-        spec_price = ordered[0]
-    if kg_price is None and len(ordered) >= 2:
-        kg_price = ordered[1]
-    if unit_price is None and len(ordered) >= 3:
-        unit_price = ordered[2]
+def _split_variant_names(name: str) -> List[str]:
+    raw = name.strip()
+    match = re.search(r"^(.*?)\((.*?)\)\s*$", raw)
+    if not match:
+        return [raw]
+    base = match.group(1).strip()
+    inner = match.group(2).strip()
+    variants: List[str] = []
+
+    if ":" in inner:
+        left, right = inner.split(":", 1)
+        left = left.strip()
+        right_parts = [x.strip() for x in right.split("/") if x.strip()]
+        for part in right_parts:
+            variants.append(f"{base} ({left}:{part})")
+            variants.append(f"{base} ({left}/{part})")
+    else:
+        parts = [x.strip() for x in inner.split("/") if x.strip()]
+        if 1 < len(parts) <= 6:
+            for part in parts:
+                variants.append(f"{base} ({part})")
+
+    if not variants:
+        variants = [raw]
+
+    dedup: List[str] = []
+    seen = set()
+    for item in variants:
+        key = data_manager.normalize_name(item)
+        if key and key not in seen:
+            seen.add(key)
+            dedup.append(item)
+    return dedup or [raw]
+
+
+def _extract_discount(text: str) -> Tuple[bool, Optional[int], Optional[str]]:
+    if not re.search(r"(sale|할인|특가|행사)", text, flags=re.I):
+        return False, None, None
+    rate_match = re.search(r"(\d{1,2})\s*%", text)
+    rate = int(rate_match.group(1)) if rate_match else None
+    label = rate_match.group(0) if rate_match else "할인"
+    return True, rate, label
+
+
+def _extract_exclusion(text: str) -> Tuple[bool, Optional[str]]:
+    for keyword in ["증정", "사은품", "세트상품", "세트", "덤"]:
+        if keyword in text:
+            return True, f"{keyword} 문구가 있어 검수 제외했습니다."
+    return False, None
+
+
+def _rule_based_spec(text: str) -> str:
+    patterns = [
+        r"\d+(?:\.\d+)?\s*(?:kg|g|ml|l)(?:\s*\([^\n]+?\))?(?:\s*/\s*\d+(?:\.\d+)?\s*(?:kg|g|ml|l)(?:\s*\([^\n]+?\))?)*",
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, text, flags=re.I)
+        if match:
+            return match.group(0).strip()
+    return ""
+
+
+def _rule_based_prices(text: str) -> PriceSet:
+    spec_match = re.search(r"규격\s*단가\s*[:：]?\s*([\d,]+)", text, flags=re.I)
+    kg_match = re.search(r"kg\s*단가\s*[:：]?\s*([\d,]+)", text, flags=re.I)
+    unit_match = re.search(r"개당\s*[:：]?\s*([\d,]+)", text, flags=re.I)
+
+    spec_price = _safe_int(spec_match.group(1)) if spec_match else None
+    kg_price = _safe_int(kg_match.group(1)) if kg_match else None
+    unit_price = _safe_int(unit_match.group(1)) if unit_match else None
+
+    if spec_price is None or (kg_price is None and unit_price is None):
+        big_numbers = []
+        for m in re.finditer(r"(?<!\d)(\d{3,8}(?:,\d{3})*)(?!\d)", text):
+            big_numbers.append(_safe_int(m.group(1)))
+        big_numbers = [n for n in big_numbers if n is not None]
+        if spec_price is None and len(big_numbers) >= 1:
+            spec_price = big_numbers[0]
+        if kg_price is None and len(big_numbers) >= 2:
+            kg_price = big_numbers[1]
+        if unit_price is None and len(big_numbers) >= 3:
+            unit_price = big_numbers[2]
+
     return PriceSet(spec_price=spec_price, kg_price=kg_price, unit_price=unit_price)
 
-def _extract_discount(card_spans, page_spans, rect):
-    card_text = " ".join(sp["text"] for sp in card_spans)
-    x0, y0, x1, y1 = rect
-    nearby = []
-    for sp in page_spans:
-        sx0, sy0, sx1, sy1 = sp["bbox"]
-        cx, cy = (sx0 + sx1)/2, (sy0 + sy1)/2
-        if x0 - 35 <= cx <= x1 + 35 and y0 - 50 <= cy <= y0 + 12:
-            nearby.append(sp["text"])
-    nearby_text = " ".join(nearby)
-    banner_text = f"{card_text} {nearby_text}".lower()
-    explicit = ("sale" in banner_text or "할인" in banner_text or "특가" in banner_text) and "%" in banner_text
-    rate = None
-    m = re.search(r"(\d{1,2})\s*%", banner_text)
-    if m:
-        rate = int(m.group(1))
-    red = any(is_red_like(sp["color"]) for sp in card_spans)
-    red_text_detected = red and explicit
-    label = nearby_text.strip() if explicit and nearby_text.strip() else None
-    return explicit, rate, label, red_text_detected
 
-def _is_excluded(name: str, text: str) -> Optional[str]:
-    joined = f"{name} {text}"
-    if any(k in joined for k in EXCLUSION_KEYWORDS):
-        return "증정/사은품/세트상품으로 검수 제외"
-    return None
-
-def parse_pdf(pdf_path: str) -> List[ParsedItem]:
+def _collect_targets(pdf_path: str, catalog_rows: List[dict]) -> List[dict]:
     doc = fitz.open(pdf_path)
+    targets: List[dict] = []
+
+    for page_index in range(len(doc)):
+        page = doc[page_index]
+        page_width = float(page.rect.width)
+        page_height = float(page.rect.height)
+        raw_blocks = [b for b in page.get_text("blocks") if str(b[4]).strip()]
+
+        anchors: List[dict] = []
+        for block in raw_blocks:
+            x0, y0, x1, y1, text, *_ = block
+            lines = [ln.strip() for ln in str(text).splitlines() if ln.strip()]
+            if not lines:
+                continue
+            title_line, matched_row, score = _best_title_line(lines, catalog_rows)
+            if not matched_row or score < 92:
+                continue
+            anchor = {
+                "x0": float(x0),
+                "y0": float(y0),
+                "x1": float(x1),
+                "y1": float(y1),
+                "line": title_line,
+                "score": score,
+                "column": 0 if float(x0) < (page_width / 2) else 1,
+                "matched_row": matched_row,
+            }
+            overlap = False
+            for prev in anchors:
+                if prev["column"] == anchor["column"] and abs(prev["y0"] - anchor["y0"]) < 18:
+                    overlap = True
+                    if anchor["score"] > prev["score"]:
+                        prev.update(anchor)
+                    break
+            if not overlap:
+                anchors.append(anchor)
+
+        anchors.sort(key=lambda x: (x["column"], x["y0"]))
+
+        for anchor in anchors:
+            same_column = [x for x in anchors if x["column"] == anchor["column"] and x["y0"] > anchor["y0"]]
+            next_y = min([x["y0"] for x in same_column], default=page_height + 1)
+            region_blocks = []
+            for block in raw_blocks:
+                x0, y0, x1, y1, text, *_ = block
+                column = 0 if float(x0) < (page_width / 2) else 1
+                if column != anchor["column"]:
+                    continue
+                if float(y0) < anchor["y0"] - 2 or float(y0) >= next_y - 2:
+                    continue
+                region_blocks.append((float(y0), float(x0), str(text).strip()))
+            region_blocks.sort(key=lambda x: (x[0], x[1]))
+            region_text = "\n".join(t for _, _, t in region_blocks if t)
+            if not region_text:
+                continue
+
+            explicit_discount, discount_rate, discount_label = _extract_discount(region_text)
+            excluded, exclusion_reason = _extract_exclusion(region_text)
+            variant_names = _split_variant_names(anchor["line"])
+            if len(variant_names) == 1:
+                variant_names = [anchor["line"]]
+
+            for variant_index, product_name in enumerate(variant_names, start=1):
+                targets.append({
+                    "id": f"p{page_index + 1}_{len(targets) + 1}",
+                    "page": page_index + 1,
+                    "product_name": product_name,
+                    "anchor_title": anchor["line"],
+                    "score": anchor["score"],
+                    "excerpt_text": _clip_text(region_text),
+                    "explicit_discount": explicit_discount,
+                    "discount_rate": discount_rate,
+                    "discount_label": discount_label,
+                    "excluded": excluded,
+                    "exclusion_reason": exclusion_reason,
+                    "rule_spec": _rule_based_spec(region_text),
+                    "rule_prices": _rule_based_prices(region_text),
+                })
+    doc.close()
+    return targets
+
+
+def _get_openai_client():
+    if not OPENAI_API_KEY:
+        raise RuntimeError("OPENAI_API_KEY가 설정되지 않았습니다. .env 파일에 API 키를 입력해 주세요.")
+    if OpenAI is None:
+        raise RuntimeError("openai 패키지가 설치되지 않았습니다. pip install -r requirements.txt 를 먼저 실행해 주세요.")
+    return OpenAI(api_key=OPENAI_API_KEY, timeout=OPENAI_TIMEOUT_SECONDS)
+
+
+def _call_openai_batch(page_targets: List[dict]) -> Dict[str, dict]:
+    client = _get_openai_client()
+    payload = {
+        "targets": [
+            {
+                "id": t["id"],
+                "product_name": t["product_name"],
+                "anchor_title": t["anchor_title"],
+                "excerpt_text": t["excerpt_text"],
+            }
+            for t in page_targets
+        ]
+    }
+
+    response = client.chat.completions.create(
+        model=OPENAI_MODEL,
+        temperature=0,
+        response_format={"type": "json_object"},
+        messages=[
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": json.dumps(payload, ensure_ascii=False)},
+        ],
+    )
+
+    content = response.choices[0].message.content if response.choices else "{}"
+    parsed = json.loads(content or "{}")
+    result_map: Dict[str, dict] = {}
+    for item in parsed.get("items", []):
+        item_id = str(item.get("id", "")).strip()
+        if item_id:
+            result_map[item_id] = item
+    return result_map
+
+
+def parse_pdf(pdf_path: str, catalog_rows: List[dict]) -> List[ParsedItem]:
+    optimized_pdf_path = prepare_pdf_for_ai(pdf_path)
+    targets = _collect_targets(pdf_path, catalog_rows)
+    if not targets:
+        return []
+
+    ai_results: Dict[str, dict] = {}
+    page_numbers = sorted({t["page"] for t in targets})
+    for page_no in page_numbers:
+        batch = [t for t in targets if t["page"] == page_no]
+        try:
+            ai_results.update(_call_openai_batch(batch))
+        except Exception as exc:
+            raise RuntimeError(f"OpenAI 상품 추출 실패 (page {page_no}): {exc}") from exc
+
     items: List[ParsedItem] = []
-    card_index = 0
-    for pno, page in enumerate(doc, start=1):
-        page_spans = _collect_spans(page)
-        card_tops = _guess_card_tops(page_spans)
-        if not card_tops:
+    for target in targets:
+        ai = ai_results.get(target["id"], {})
+        rule_prices: PriceSet = target["rule_prices"]
+
+        spec_text = _clean_text(ai.get("spec_text") or target["rule_spec"] or "")
+        ingredient_content = _clean_text(ai.get("ingredient_content") or "") or None
+        spec_price = _safe_int(ai.get("spec_price"))
+        kg_price = _safe_int(ai.get("kg_price"))
+        unit_price = _safe_int(ai.get("unit_price"))
+
+        if spec_price is None:
+            spec_price = rule_prices.spec_price
+        if kg_price is None:
+            kg_price = rule_prices.kg_price
+        if unit_price is None:
+            unit_price = rule_prices.unit_price
+
+        evidence_parts = [
+            f"anchor={target['anchor_title']}",
+            f"excerpt={target['excerpt_text'][:240]}",
+        ]
+        if ai.get("evidence"):
+            evidence_parts.append(f"ai={_clean_text(str(ai.get('evidence')))}")
+
+        if not any([spec_text, ingredient_content, spec_price is not None, kg_price is not None, unit_price is not None]):
             continue
-        bounds = _card_bounds(page.rect, card_tops)
-        for rect in bounds:
-            card_spans = _spans_in_rect(page_spans, rect)
-            if not card_spans:
-                continue
-            name = _extract_product_name(card_spans)
-            spec_text = _extract_spec(card_spans)
-            prices = _extract_prices(card_spans)
-            body_text = " ".join(sp["text"] for sp in card_spans)
-            if not name and not spec_text:
-                continue
-            if len(name) < 2:
-                lines = [sp["text"] for sp in sorted(card_spans, key=lambda x: (x["bbox"][1], x["bbox"][0])) if _looks_like_name_line(sp["text"])]
-                name = normalize_product_name(" ".join(lines[:2]))
-            card_index += 1
-            explicit, rate, label, red_detected = _extract_discount(card_spans, page_spans, rect)
-            exclusion_reason = _is_excluded(name, body_text)
-            items.append(ParsedItem(
-                page=pno,
-                card_index=card_index,
-                pdf_name=name,
-                product_name=name,
+
+        items.append(
+            ParsedItem(
+                page=target["page"],
+                item_index=len(items) + 1,
+                product_name=target["product_name"],
                 spec_text=spec_text,
-                body_text=body_text,
-                prices=prices,
-                discount_rate=rate,
-                discount_label=label,
-                explicit_discount=explicit,
-                red_text_detected=red_detected,
-                excluded=bool(exclusion_reason),
-                exclusion_reason=exclusion_reason,
-                raw={"rect": rect},
-            ))
+                prices=PriceSet(
+                    spec_price=spec_price,
+                    kg_price=kg_price,
+                    unit_price=unit_price,
+                ),
+                explicit_discount=target["explicit_discount"],
+                discount_rate=target["discount_rate"],
+                discount_label=target["discount_label"],
+                excluded=target["excluded"],
+                exclusion_reason=target["exclusion_reason"],
+                ingredient_content=ingredient_content,
+                evidence_text=" | ".join(evidence_parts),
+                raw={
+                    "target_id": target["id"],
+                    "optimized_pdf": optimized_pdf_path,
+                    "ai": ai,
+                },
+            )
+        )
+
     return items

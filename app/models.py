@@ -1,11 +1,13 @@
 from dataclasses import dataclass, field
-from typing import Optional, List, Dict, Any
+from typing import Any, Dict, List, Optional
+
 
 @dataclass
 class PriceSet:
     spec_price: Optional[int] = None
     kg_price: Optional[int] = None
     unit_price: Optional[int] = None
+
 
 @dataclass
 class ParsedItem:
@@ -19,8 +21,10 @@ class ParsedItem:
     discount_label: Optional[str] = None
     excluded: bool = False
     exclusion_reason: Optional[str] = None
+    ingredient_content: Optional[str] = None
     evidence_text: Optional[str] = None
     raw: Dict[str, Any] = field(default_factory=dict)
+
 
 @dataclass
 class InspectionRow:

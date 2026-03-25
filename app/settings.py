@@ -1,17 +1,22 @@
 from dotenv import load_dotenv
+from pathlib import Path
 import os
 
 load_dotenv()
 
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "").strip()
-OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4.1-mini").strip()
-OPENAI_FILE_EXPIRE_SECONDS = int(os.getenv("OPENAI_FILE_EXPIRE_SECONDS", "86400"))
+BASE_DIR = Path(__file__).resolve().parent.parent
+DATA_DIR = BASE_DIR / "data"
+TEMP_DIR = BASE_DIR / "temp"
+
+MASTER_XLSX_PATH = Path(os.getenv("MASTER_XLSX_PATH", "")).expanduser() if os.getenv("MASTER_XLSX_PATH") else (DATA_DIR / "master.xlsx")
 HOST = os.getenv("HOST", "127.0.0.1").strip()
 PORT = int(os.getenv("PORT", "8000"))
 RELOAD = os.getenv("RELOAD", "true").lower() == "true"
-PDF_OPTIMIZE_MODE = os.getenv("PDF_OPTIMIZE_MODE", "auto").strip().lower()
 
-BASE_DIR = os.path.dirname(os.path.dirname(__file__))
-DATA_DIR = os.path.join(BASE_DIR, "data")
-TEMP_DIR = os.path.join(BASE_DIR, "temp")
-MASTER_XLSX_PATH = os.path.join(DATA_DIR, "master.xlsx")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "").strip()
+OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4.1-mini").strip()
+OPENAI_TIMEOUT_SECONDS = int(os.getenv("OPENAI_TIMEOUT_SECONDS", "120"))
+PDF_TEXT_SNIPPET_LIMIT = int(os.getenv("PDF_TEXT_SNIPPET_LIMIT", "2200"))
+
+DATA_DIR.mkdir(exist_ok=True, parents=True)
+TEMP_DIR.mkdir(exist_ok=True, parents=True)
