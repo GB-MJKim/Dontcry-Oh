@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Don't Cry, Oh!{% endblock %}</title>
+  <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard-dynamic-subset.min.css">
+  <link rel="apple-touch-icon" sizes="180x180" href="{{ request.url_for('static', path='favicon/apple-touch-icon.png') }}">
+  <link rel="icon" type="image/png" sizes="32x32" href="{{ request.url_for('static', path='favicon/favicon-32x32.png') }}">
+  <link rel="icon" type="image/png" sizes="16x16" href="{{ request.url_for('static', path='favicon/favicon-16x16.png') }}">
+  <link rel="shortcut icon" href="{{ request.url_for('static', path='favicon/favicon.ico') }}">
+  <link rel="manifest" href="{{ request.url_for('static', path='favicon/site.webmanifest') }}">
+  <meta name="theme-color" content="#fff8f1">
+  <link rel="stylesheet" href="{{ request.url_for('static', path='site.css') }}">
+  {% block extra_head %}{% endblock %}
+</head>
+<body>
+  <div class="site-shell">
+    <div class="loading-backdrop" id="loadingBackdrop"></div>
+    <div class="loading-float" id="loadingFloat" aria-live="polite" aria-hidden="true">
+      <div class="loading-head">
+        <div>
+          <p class="loading-title" id="loadingTitle">처리 준비 중</p>
+          <p class="loading-subtitle" id="loadingSubtitle">요청을 시작하고 있습니다.</p>
+        </div>
+        <div class="loading-spinner" aria-hidden="true"></div>
+      </div>
+      <div class="loading-progress">
+        <div class="loading-progress-bar" id="loadingProgressBar"></div>
+      </div>
+      <div class="loading-meta">
+        <span id="loadingPercent">0%</span>
+        <span id="loadingElapsed">0초</span>
+      </div>
+      <ul class="loading-steps" id="loadingSteps"></ul>
+    </div>
+
+    <header class="topbar">
+      <div class="container">
+        <div class="topbar-inner">
+          <a href="/" class="brand">
+            <div class="brand-mark">D</div>
+            <div class="brand-copy">
+              <p class="brand-name">Don't Cry, Oh!</p>
+              <p class="brand-tag">Nenia Price Inspector</p>
+            </div>
+          </a>
+          <nav class="nav-links" aria-label="주요 메뉴">
+            <a href="/" class="nav-link {% if active_page == 'home' %}active{% endif %}">검수 홈</a>
+            <a href="/master" class="nav-link {% if active_page == 'master' %}active{% endif %}">기준 데이터 관리</a>
+          </nav>
+        </div>
+      </div>
+    </header>
+
+    <main class="main-content">
+      <div class="container">
+        {% if error_message or success_message %}
+          <div class="message-stack">
+            {% if error_message %}
+              <div class="msg err">{{ error_message }}</div>
+            {% endif %}
+            {% if success_message %}
+              <div class="msg ok">{{ success_message }}</div>
+            {% endif %}
+          </div>
+        {% endif %}
+
+        {% block content %}{% endblock %}
+      </div>
+    </main>
+  </div>
+
+  <script src="{{ request.url_for('static', path='site.js') }}"></script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

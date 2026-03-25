@@ -1,152 +1,278 @@
-<!doctype html>
-<html lang="ko">
-<head>
-  <meta charset="utf-8">
-  <title>홍보북 가격 검수</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <style>
-    :root { --bg:#f6f7fb; --card:#fff; --line:#e4e7ee; --text:#1e2430; --muted:#5b6473; --ok:#e9f8ef; --warn:#fff5df; --err:#ffe8e8; --ex:#eef2ff; }
-    * { box-sizing:border-box; }
-    body { margin:0; background:var(--bg); color:var(--text); font-family:Arial, "Malgun Gothic", sans-serif; }
-    .wrap { max-width:1180px; margin:0 auto; padding:20px; }
-    .grid { display:grid; grid-template-columns:1fr; gap:16px; }
-    @media (min-width:980px){ .grid{ grid-template-columns:360px 1fr; } }
-    .card { background:var(--card); border:1px solid var(--line); border-radius:18px; padding:18px; box-shadow:0 4px 12px rgba(0,0,0,.03); }
-    h1,h2,h3 { margin:0 0 12px; }
-    p { margin:8px 0; line-height:1.5; }
-    .muted { color:var(--muted); font-size:14px; }
-    .msg { padding:12px 14px; border-radius:12px; margin-bottom:14px; font-size:14px; }
-    .msg.err { background:var(--err); }
-    .msg.ok { background:var(--ok); }
-    form { display:grid; gap:10px; }
-    input[type=file], select, button { width:100%; padding:12px; border-radius:12px; border:1px solid var(--line); font-size:14px; }
-    button { background:#1f6feb; color:#fff; border:none; cursor:pointer; font-weight:700; }
-    button.secondary { background:#111827; }
-    table { width:100%; border-collapse:collapse; font-size:13px; }
-    th, td { border-bottom:1px solid var(--line); padding:10px 8px; vertical-align:top; text-align:left; }
-    th { background:#fafbfe; position:sticky; top:0; }
-    .table-wrap { overflow:auto; border:1px solid var(--line); border-radius:14px; }
-    .status-정상 { background:var(--ok); }
-    .status-오류 { background:var(--err); }
-    .status-할인적용 { background:var(--warn); }
-    .status-제외 { background:var(--ex); }
-    .status-확인필요 { background:var(--warn); }
-    ul.notes { margin:0; padding-left:18px; }
-    .chip { display:inline-block; padding:4px 8px; border-radius:999px; background:#f0f3f9; font-size:12px; margin-right:6px; }
-  </style>
-</head>
-<body>
-<div class="wrap">
-  <h1>홍보북 가격 검수</h1>
-  <p class="muted">PDF 상품을 기준 엑셀과 비교해 권역별 가격 오류를 확인합니다. 수도권은 규격단가·KG단가·개당단가를 비교하고, 나머지 권역은 규격단가·개당단가를 비교합니다.</p>
+{% extends "base.html" %}
 
-  {% if error_message %}<div class="msg err">{{ error_message }}</div>{% endif %}
-  {% if success_message %}<div class="msg ok">{{ success_message }}</div>{% endif %}
+{% block title %}Don't Cry, Oh! | 검수 홈{% endblock %}
 
-  <div class="grid">
-    <div class="card">
-      <h2>기준 데이터</h2>
-      <p><span class="chip">행 수 {{ master_count }}</span></p>
-      <form action="/data/upload" method="post" enctype="multipart/form-data">
-        <input type="file" name="file" accept=".xlsx,.xlsm" required>
-        <button type="submit" class="secondary">기준 엑셀 업로드</button>
+{% block content %}
+  <section class="hero">
+    <div class="hero-center">
+      <div class="hero-kicker">Price Rescue Studio</div>
+      <h1 class="hero-title">Don't <em>Cry</em>, Oh!</h1>
+      <p class="hero-copy">
+        잘못 읽힌 PDF 가격 때문에 더는 울지 않도록.
+        홍보북의 상품 정보와 가격을 빠르게 읽고, 기준 데이터와 차이를 한눈에 확인하는
+        깔끔한 검수 화면입니다.
+      </p>
+      <div class="hero-actions">
+        <a href="#inspect" class="btn btn-primary">바로 검수 시작</a>
+        <a href="/master" class="btn btn-secondary">기준 데이터 관리</a>
+      </div>
+      <div class="hero-stats">
+        <div class="stat-card">
+          <span class="stat-label">기준 상품 수</span>
+          <span class="stat-value">{{ master_count }}</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-label">검수 모델</span>
+          <span class="stat-value">{{ openai_model }}</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-label">이번 추출 수</span>
+          <span class="stat-value">{{ parsed_count }}</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section-grid" id="inspect">
+    <div class="panel">
+      <div class="panel-header">
+        <div>
+          <span class="panel-kicker">Inspection</span>
+          <h2 class="panel-title">PDF 가격 검수</h2>
+          <p class="panel-copy">
+            권역을 고르고 PDF를 업로드하면 상품 정보 추출, 가격 비교, 오류 재검증까지 순서대로 진행합니다.
+            결과는 아래 표에서 바로 확인할 수 있습니다.
+          </p>
+        </div>
+        <div class="panel-badge">Live</div>
+      </div>
+
+      <form action="/inspect" method="post" enctype="multipart/form-data" class="form-grid" data-progress-task="inspect">
+        <div class="field-group">
+          <label class="field-label" for="region">검수 권역</label>
+          <select id="region" name="region" class="field-select" required>
+            {% for region in regions %}
+              <option value="{{ region }}" {% if selected_region == region %}selected{% endif %}>{{ region }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="field-group">
+          <label class="field-label" for="pdf_file">홍보북 PDF</label>
+          <input id="pdf_file" type="file" name="pdf_file" class="field-input" accept=".pdf" required>
+        </div>
+
+        <button type="submit" class="btn btn-primary field-button">검수 실행</button>
       </form>
-      <hr style="border:none;border-top:1px solid var(--line);margin:18px 0;">
-      <h2>PDF 검수</h2>
-      <form action="/inspect" method="post" enctype="multipart/form-data">
-        <select name="region" required>
-          {% for region in regions %}
-            <option value="{{ region }}" {% if selected_region == region %}selected{% endif %}>{{ region }}</option>
-          {% endfor %}
-        </select>
-        <input type="file" name="pdf_file" accept=".pdf" required>
-        <button type="submit">검수 실행</button>
-      </form>
+
       {% if uploaded_pdf_name %}
-      <p class="muted">검수 파일: {{ uploaded_pdf_name }}</p>
+        <p class="footer-note">현재 검수 파일: <strong>{{ uploaded_pdf_name }}</strong></p>
       {% endif %}
-      <p class="muted">최근 파싱 상품 수: {{ parsed_count }}</p>
     </div>
 
-    <div class="card">
-      <h2>기준 데이터 미리보기</h2>
-      <div class="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              {% for col in columns %}<th>{{ col }}</th>{% endfor %}
-            </tr>
-          </thead>
-          <tbody>
-            {% for row in rows %}
-              <tr>
-                {% for col in columns %}
-                  <td>{{ row[col] }}</td>
-                {% endfor %}
-              </tr>
-            {% endfor %}
-            {% if not rows %}
-              <tr><td colspan="20">기준 데이터가 없습니다.</td></tr>
-            {% endif %}
-          </tbody>
-        </table>
+    <div class="meta-grid">
+      <div class="soft-card">
+        <span class="eyebrow">Workflow</span>
+        <h3>검수는 이렇게 진행됩니다</h3>
+        <div class="mini-list">
+          <div class="mini-item">
+            <div class="mini-dot"></div>
+            <div class="mini-copy">
+              <strong>1차 추출</strong>
+              <span>PDF에서 상품명, 규격, 가격 정보를 읽어 기본 데이터를 만듭니다.</span>
+            </div>
+          </div>
+          <div class="mini-item">
+            <div class="mini-dot"></div>
+            <div class="mini-copy">
+              <strong>기준 비교</strong>
+              <span>엑셀 기준 데이터와 비교해 가격 누락과 불일치를 잡아냅니다.</span>
+            </div>
+          </div>
+          <div class="mini-item">
+            <div class="mini-dot"></div>
+            <div class="mini-copy">
+              <strong>오류 재검증</strong>
+              <span>틀린 항목만 다시 확인해 결과를 더 안정적으로 정리합니다.</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="soft-card">
+        <span class="eyebrow">For Designers</span>
+        <h3>디자이너가 보기 쉬운 화면</h3>
+        <p>검수 결과는 상태, 규격, PDF 가격, 기준 가격, 비고를 나란히 보여줘서 어디가 틀렸는지 바로 찾을 수 있게 구성했습니다.</p>
+      </div>
+
+      <div class="soft-card">
+        <span class="eyebrow">Data</span>
+        <h3>기준 데이터는 별도 관리</h3>
+        <p>업로드와 미리보기는 분리된 페이지에서 관리할 수 있습니다. 홈 화면은 검수에만 집중되도록 정리했습니다.</p>
+        <div style="margin-top: 16px;">
+          <a href="/master" class="btn btn-secondary">기준 데이터 페이지 열기</a>
+        </div>
       </div>
     </div>
-  </div>
+  </section>
 
-  <div class="card" style="margin-top:16px;">
-    <h2>검수 결과</h2>
-    {% if results %}
-      <div class="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>No</th>
-              <th>상태</th>
-              <th>PDF 상품명</th>
-              <th>기준 상품명</th>
-              <th>매칭점수</th>
-              <th>PDF 규격</th>
-              <th>기준 규격</th>
-              <th>PDF 가격</th>
-              <th>기준 가격</th>
-              <th>비고</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for row in results %}
-              <tr class="status-{{ row.status }}">
-                <td>{{ row.index }}</td>
-                <td>{{ row.status }}</td>
-                <td>{{ row.product_name_pdf }}</td>
-                <td>{{ row.product_name_master }}</td>
-                <td>{{ "%.1f"|format(row.match_score) }}</td>
-                <td>{{ row.pdf_spec }}</td>
-                <td>{{ row.master_spec }}</td>
-                <td>
-                  규격 {{ row.pdf_prices.spec_price }}<br>
-                  KG {{ row.pdf_prices.kg_price }}<br>
-                  개당 {{ row.pdf_prices.unit_price }}
-                </td>
-                <td>
-                  규격 {{ row.master_prices.spec_price }}<br>
-                  KG {{ row.master_prices.kg_price }}<br>
-                  개당 {{ row.master_prices.unit_price }}
-                </td>
-                <td>
-                  <ul class="notes">
-                    {% for note in row.notes %}<li>{{ note }}</li>{% endfor %}
-                  </ul>
-                </td>
-              </tr>
-            {% endfor %}
-          </tbody>
-        </table>
+  <section class="result-panel">
+    <div class="panel">
+      <div class="panel-header">
+        <div>
+          <span class="panel-kicker">Results</span>
+          <h2 class="panel-title">검수 결과</h2>
+          <p class="panel-copy">상태별로 결과를 확인하고, 비고에서 매칭 점수와 오류 사유를 바로 볼 수 있습니다.</p>
+        </div>
       </div>
-    {% else %}
-      <p class="muted">아직 검수 결과가 없습니다.</p>
-    {% endif %}
-  </div>
-</div>
-</body>
-</html>
+
+      {% if results %}
+        <div class="result-list">
+          {% for row in results %}
+            {% set is_error = row.status == '오류' %}
+            {% set card_variant = 'card-ok' if row.status == '정상' else 'card-error' if row.status == '오류' else 'card-warn' if row.status in ['할인적용', '확인필요'] else 'card-ex' %}
+            {% set badge_variant = 'badge-ok' if row.status == '정상' else 'badge-error' if row.status == '오류' else 'badge-warn' if row.status in ['할인적용', '확인필요'] else 'badge-ex' %}
+            {% set missing_master = row.product_name_master is none %}
+            {% set spec_issue = is_error and row.master_spec and row.pdf_spec != row.master_spec %}
+            {% set spec_price_issue = is_error and row.master_prices.spec_price is not none and row.pdf_prices.spec_price != row.master_prices.spec_price %}
+            {% set kg_price_issue = is_error and row.master_prices.kg_price is not none and row.pdf_prices.kg_price != row.master_prices.kg_price %}
+            {% set unit_price_issue = is_error and row.master_prices.unit_price is not none and row.pdf_prices.unit_price != row.master_prices.unit_price %}
+            {% set issue_ns = namespace(count=0) %}
+            {% if missing_master %}{% set issue_ns.count = issue_ns.count + 1 %}{% endif %}
+            {% if spec_issue %}{% set issue_ns.count = issue_ns.count + 1 %}{% endif %}
+            {% if spec_price_issue %}{% set issue_ns.count = issue_ns.count + 1 %}{% endif %}
+            {% if kg_price_issue %}{% set issue_ns.count = issue_ns.count + 1 %}{% endif %}
+            {% if unit_price_issue %}{% set issue_ns.count = issue_ns.count + 1 %}{% endif %}
+
+            <article class="result-card {{ card_variant }}">
+              <div class="result-index">
+                <span class="result-index-label">No</span>
+                <strong class="result-index-value">{{ row.index }}</strong>
+                <span class="status-badge {{ badge_variant }}">{{ row.status }}</span>
+              </div>
+
+              <div class="result-content">
+                <div class="result-topline">
+                  <div class="result-meta-chip">매칭 점수 {{ "%.1f"|format(row.match_score) }}</div>
+                  {% if issue_ns.count %}
+                    <div class="result-meta-chip result-meta-chip-error">오류 포인트 {{ issue_ns.count }}개</div>
+                  {% endif %}
+                </div>
+
+                <div class="result-compare-grid">
+                  <section class="compare-card compare-card-pdf">
+                    <div class="compare-card-head">
+                      <span class="compare-kicker">PDF 내용</span>
+                      <h3>PDF 추출 정보</h3>
+                    </div>
+
+                    <div class="compare-main-name">{{ row.product_name_pdf }}</div>
+
+                    <div class="compare-info-list">
+                      <div class="compare-info-item {% if spec_issue %}is-error{% endif %}">
+                        <span class="compare-label">규격</span>
+                        <span class="compare-value">{{ row.pdf_spec or '-' }}</span>
+                      </div>
+                    </div>
+
+                    <div class="price-card-grid">
+                      <div class="price-card-line {% if spec_price_issue %}is-error{% endif %}">
+                        <span class="price-card-key">규격단가</span>
+                        <strong class="price-card-value">{{ row.pdf_prices.spec_price if row.pdf_prices.spec_price is not none else '-' }}</strong>
+                      </div>
+                      <div class="price-card-line {% if kg_price_issue %}is-error{% endif %}">
+                        <span class="price-card-key">KG단가</span>
+                        <strong class="price-card-value">{{ row.pdf_prices.kg_price if row.pdf_prices.kg_price is not none else '-' }}</strong>
+                      </div>
+                      <div class="price-card-line {% if unit_price_issue %}is-error{% endif %}">
+                        <span class="price-card-key">개당단가</span>
+                        <strong class="price-card-value">{{ row.pdf_prices.unit_price if row.pdf_prices.unit_price is not none else '-' }}</strong>
+                      </div>
+                    </div>
+                  </section>
+
+                  <section class="compare-card compare-card-master {% if missing_master %}is-error{% endif %}">
+                    <div class="compare-card-head">
+                      <span class="compare-kicker">기준 데이터</span>
+                      <h3>기준 비교 정보</h3>
+                    </div>
+
+                    <div class="compare-main-name">{{ row.product_name_master or '매칭된 기준 상품 없음' }}</div>
+
+                    <div class="compare-info-list">
+                      <div class="compare-info-item {% if spec_issue or missing_master %}is-error{% endif %}">
+                        <span class="compare-label">규격</span>
+                        <span class="compare-value">{{ row.master_spec or '-' }}</span>
+                      </div>
+                    </div>
+
+                    <div class="price-card-grid">
+                      <div class="price-card-line {% if spec_price_issue or missing_master %}is-error{% endif %}">
+                        <span class="price-card-key">규격단가</span>
+                        <strong class="price-card-value">{{ row.master_prices.spec_price if row.master_prices.spec_price is not none else '-' }}</strong>
+                      </div>
+                      <div class="price-card-line {% if kg_price_issue %}is-error{% endif %}">
+                        <span class="price-card-key">KG단가</span>
+                        <strong class="price-card-value">{{ row.master_prices.kg_price if row.master_prices.kg_price is not none else '-' }}</strong>
+                      </div>
+                      <div class="price-card-line {% if unit_price_issue %}is-error{% endif %}">
+                        <span class="price-card-key">개당단가</span>
+                        <strong class="price-card-value">{{ row.master_prices.unit_price if row.master_prices.unit_price is not none else '-' }}</strong>
+                      </div>
+                    </div>
+                  </section>
+                </div>
+
+                <details class="remark-details {% if issue_ns.count %}has-issues{% endif %}">
+                  <summary class="remark-summary">
+                    <div class="remark-summary-main">
+                      <span class="remark-summary-title">비고</span>
+                      <span class="remark-summary-copy">
+                        {% if issue_ns.count %}
+                          클릭해서 오류 이유와 근거 {{ row.notes|length }}건 보기
+                        {% else %}
+                          클릭해서 참고 메모 {{ row.notes|length }}건 보기
+                        {% endif %}
+                      </span>
+                    </div>
+                    <div class="remark-chip-row">
+                      {% if missing_master %}<span class="remark-chip is-error">상품 매칭 실패</span>{% endif %}
+                      {% if spec_issue %}<span class="remark-chip is-error">규격 차이</span>{% endif %}
+                      {% if spec_price_issue %}<span class="remark-chip is-error">규격단가 오류</span>{% endif %}
+                      {% if kg_price_issue %}<span class="remark-chip is-error">KG단가 오류</span>{% endif %}
+                      {% if unit_price_issue %}<span class="remark-chip is-error">개당단가 오류</span>{% endif %}
+                      {% if not issue_ns.count %}<span class="remark-chip">오류 없음</span>{% endif %}
+                    </div>
+                  </summary>
+
+                  <div class="remark-body">
+                    {% if issue_ns.count %}
+                      <div class="remark-alert-list">
+                        {% if missing_master %}<div class="remark-alert">기준 데이터에서 상품 매칭을 찾지 못했습니다.</div>{% endif %}
+                        {% if spec_issue %}<div class="remark-alert">PDF 규격과 기준 규격이 다릅니다.</div>{% endif %}
+                        {% if spec_price_issue %}<div class="remark-alert">규격단가가 기준 데이터와 다릅니다.</div>{% endif %}
+                        {% if kg_price_issue %}<div class="remark-alert">KG단가가 없거나 기준 데이터와 다릅니다.</div>{% endif %}
+                        {% if unit_price_issue %}<div class="remark-alert">개당단가가 없거나 기준 데이터와 다릅니다.</div>{% endif %}
+                      </div>
+                    {% endif %}
+
+                    <ul class="notes notes-collapsible">
+                      {% for note in row.notes %}
+                        {% set note_issue = '찾지 못했습니다' in note or '다릅니다' in note or '상품을 찾지 못했습니다' in note or '재검증 사유:' in note %}
+                        <li class="{% if note_issue %}note-issue{% else %}note-normal{% endif %}">{{ note }}</li>
+                      {% endfor %}
+                    </ul>
+                  </div>
+                </details>
+              </div>
+            </article>
+          {% endfor %}
+        </div>
+      {% else %}
+        <div class="empty-state">
+          업로드한 PDF를 검수하면 이 영역에 결과가 표시됩니다.
+        </div>
+      {% endif %}
+    </div>
+  </section>
+{% endblock %}
