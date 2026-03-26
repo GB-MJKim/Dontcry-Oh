@@ -62,15 +62,15 @@
           <div class="price-card-grid">
             <div class="price-card-line {% if spec_price_issue %}is-error{% endif %}">
               <span class="price-card-key">규격단가</span>
-              <strong class="price-card-value">{{ row.pdf_prices.spec_price if row.pdf_prices.spec_price is not none else '-' }}</strong>
+              <strong class="price-card-value">{{ price_text(row.pdf_prices.spec_price) }}</strong>
             </div>
             <div class="price-card-line {% if kg_price_issue %}is-error{% endif %}">
               <span class="price-card-key">{{ measure_label }}</span>
-              <strong class="price-card-value">{{ row.pdf_prices.kg_price if row.pdf_prices.kg_price is not none else '-' }}</strong>
+              <strong class="price-card-value">{{ price_text(row.pdf_prices.kg_price) }}</strong>
             </div>
             <div class="price-card-line {% if unit_price_issue %}is-error{% endif %}">
               <span class="price-card-key">개당단가</span>
-              <strong class="price-card-value">{{ row.pdf_prices.unit_price if row.pdf_prices.unit_price is not none else '-' }}</strong>
+              <strong class="price-card-value">{{ price_text(row.pdf_prices.unit_price) }}</strong>
             </div>
           </div>
         </section>
@@ -93,15 +93,15 @@
           <div class="price-card-grid">
             <div class="price-card-line {% if spec_price_issue or missing_master %}is-error{% endif %}">
               <span class="price-card-key">규격단가</span>
-              <strong class="price-card-value">{{ row.master_prices.spec_price if row.master_prices.spec_price is not none else '-' }}</strong>
+              <strong class="price-card-value">{{ price_text(row.master_prices.spec_price) }}</strong>
             </div>
             <div class="price-card-line {% if kg_price_issue %}is-error{% endif %}">
               <span class="price-card-key">{{ measure_label }}</span>
-              <strong class="price-card-value">{{ row.master_prices.kg_price if row.master_prices.kg_price is not none else '-' }}</strong>
+              <strong class="price-card-value">{{ price_text(row.master_prices.kg_price) }}</strong>
             </div>
             <div class="price-card-line {% if unit_price_issue %}is-error{% endif %}">
               <span class="price-card-key">개당단가</span>
-              <strong class="price-card-value">{{ row.master_prices.unit_price if row.master_prices.unit_price is not none else '-' }}</strong>
+              <strong class="price-card-value">{{ price_text(row.master_prices.unit_price) }}</strong>
             </div>
           </div>
         </section>
@@ -325,6 +325,23 @@
       {% if uploaded_pdf_url %}
         <aside class="pdf-stage">
           <div class="pdf-stage-sticky">
+            <div class="current-file-banner pdf-current-file">
+              <div class="current-file-banner-main">
+                <span class="current-file-label">현재 PDF</span>
+                <strong class="current-file-name" data-pdf-viewer-name>{{ uploaded_pdf_name or '업로드 PDF 미리보기' }}</strong>
+              </div>
+              <div class="current-file-banner-actions">
+                <a
+                  href="{{ uploaded_pdf_url }}"
+                  class="btn btn-secondary current-file-banner-link"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  data-pdf-viewer-link
+                >
+                  PDF 열기
+                </a>
+              </div>
+            </div>
             <div class="pdf-frame-shell pdf-frame-shell-standalone">
               <iframe
                 src="{{ uploaded_pdf_url }}#toolbar=1&navpanes=0&view=FitH"
@@ -338,7 +355,7 @@
         </aside>
       {% endif %}
 
-      <div class="panel result-panel-main">
+      <div class="panel result-panel-main" data-result-panel-main>
         <div class="panel-header">
           <div>
             <span class="panel-kicker">Results</span>
@@ -350,7 +367,16 @@
         {% if inspection_batches %}
           <div class="result-batch-list">
             {% for batch in inspection_batches %}
-              <section class="result-batch" id="{{ batch.section_id }}">
+              <section
+                class="result-batch"
+                id="{{ batch.section_id }}"
+                data-result-batch
+                data-preview-name="{{ batch.display_name }}"
+                {% if batch.preview_url %}
+                  data-preview-src="{{ batch.preview_url }}#toolbar=1&navpanes=0&view=FitH"
+                  data-preview-href="{{ batch.preview_url }}"
+                {% endif %}
+              >
                 <div class="result-batch-head">
                   <div class="result-batch-copy">
                     <span class="panel-kicker">PDF File {{ loop.index }}</span>

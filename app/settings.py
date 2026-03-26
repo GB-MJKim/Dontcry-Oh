@@ -21,6 +21,7 @@ RELOAD = os.getenv("RELOAD", "true").lower() == "true"
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "").strip()
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4.1-mini").strip()
 OPENAI_TIMEOUT_SECONDS = int(os.getenv("OPENAI_TIMEOUT_SECONDS", "120"))
+OPENAI_FILE_EXPIRE_SECONDS = int(os.getenv("OPENAI_FILE_EXPIRE_SECONDS", "1800"))
 PDF_TEXT_SNIPPET_LIMIT = int(os.getenv("PDF_TEXT_SNIPPET_LIMIT", "2200"))
 
 DATA_DIR.mkdir(exist_ok=True, parents=True)

@@ -247,32 +247,266 @@
     const frame = document.querySelector("[data-pdf-viewer-frame]");
     const nameEl = document.querySelector("[data-pdf-viewer-name]");
     const linkEl = document.querySelector("[data-pdf-viewer-link]");
+    const resultPanelEl = document.querySelector("[data-result-panel-main]");
     const buttons = Array.from(document.querySelectorAll("[data-preview-button]"));
-    if (!frame || !buttons.length) {
+    const batches = Array.from(document.querySelectorAll("[data-result-batch]"));
+
+    if (!frame && !buttons.length && !batches.length) {
       return;
     }
 
+    let activeBatchKey = "";
+
+    const setLinkState = (element, href) => {
+      if (!element) {
+        return;
+      }
+      if (href) {
+        element.href = href;
+        element.hidden = false;
+        element.removeAttribute("aria-hidden");
+      } else {
+        element.hidden = true;
+        element.setAttribute("aria-hidden", "true");
+      }
+    };
+
     const setActiveButton = (href) => {
       buttons.forEach((button) => {
-        button.classList.toggle("is-active", button.dataset.previewHref === href);
+        button.classList.toggle("is-active", Boolean(href) && button.dataset.previewHref === href);
       });
+    };
+
+    const updateCurrentFileUi = (name, href) => {
+      const safeName = name || "업로드 PDF 미리보기";
+      if (nameEl) {
+        nameEl.textContent = safeName;
+      }
+      setLinkState(linkEl, href);
+      setActiveButton(href);
+    };
+
+    const activateBatch = (batch, syncFrame = true) => {
+      if (!batch) {
+        return;
+      }
+
+      const previewHref = batch.dataset.previewHref || "";
+      const previewSrc = batch.dataset.previewSrc || previewHref;
+      const previewName = batch.dataset.previewName || "";
+
+      batches.forEach((item) => {
+        item.classList.toggle("is-active", item === batch);
+      });
+
+      updateCurrentFileUi(previewName, previewHref);
+
+      if (frame && syncFrame && previewSrc) {
+        const currentSrc = frame.getAttribute("src") || "";
+        if (currentSrc !== previewSrc) {
+          frame.src = previewSrc;
+        }
+      }
+
+      activeBatchKey = batch.id || previewHref || previewName;
     };
 
     buttons.forEach((button) => {
       button.addEventListener("click", () => {
         const previewHref = button.dataset.previewHref || "";
+        const previewName = button.dataset.previewName || "";
+        const matchedBatch = button.closest("[data-result-batch]") || batches.find((batch) => batch.dataset.previewHref === previewHref);
+        if (matchedBatch) {
+          activateBatch(matchedBatch, true);
+          return;
+        }
+
         const previewSrc = button.dataset.previewSrc || previewHref;
-        if (previewSrc) {
+        updateCurrentFileUi(previewName, previewHref);
+        if (frame && previewSrc) {
           frame.src = previewSrc;
-        }
-        if (linkEl && previewHref) {
-          linkEl.href = previewHref;
-        }
-        if (nameEl && button.dataset.previewName) {
-          nameEl.textContent = button.dataset.previewName;
         }
         setActiveButton(previewHref);
       });
+    });
+
+    if (!batches.length) {
+      return;
+    }
+
+    const findCurrentBatch = () => {
+      const panelTop = resultPanelEl ? resultPanelEl.getBoundingClientRect().top : 0;
+      const activationLine = panelTop + 24;
+      let candidate = null;
+      let firstVisible = null;
+
+      batches.forEach((batch) => {
+        const rect = batch.getBoundingClientRect();
+        if (rect.bottom <= activationLine) {
+          return;
+        }
+        if (!firstVisible) {
+          firstVisible = batch;
+        }
+        if (rect.top <= activationLine + 24) {
+          candidate = batch;
+        }
+      });
+
+      return candidate || firstVisible || batches[batches.length - 1];
+    };
+
+    let syncFrameTicket = 0;
+    const syncViewerToScroll = () => {
+      if (syncFrameTicket) {
+        return;
+      }
+      syncFrameTicket = window.requestAnimationFrame(() => {
+        syncFrameTicket = 0;
+        const batch = findCurrentBatch();
+        if (!batch) {
+          return;
+        }
+        const nextKey = batch.id || batch.dataset.previewHref || batch.dataset.previewName || "";
+        if (nextKey === activeBatchKey && batch.classList.contains("is-active")) {
+          return;
+        }
+        activateBatch(batch, true);
+      });
+    };
+
+    const initialBatch =
+      batches.find((batch) => {
+        const href = batch.dataset.previewHref || "";
+        return buttons.some((button) => button.classList.contains("is-active") && button.dataset.previewHref === href);
+      }) ||
+      findCurrentBatch() ||
+      batches[0];
+
+    activateBatch(initialBatch, false);
+
+    if (resultPanelEl) {
+      resultPanelEl.addEventListener("scroll", syncViewerToScroll, { passive: true });
+    }
+    window.addEventListener("scroll", syncViewerToScroll, { passive: true });
+    window.addEventListener("resize", syncViewerToScroll);
+  }
+
+  function setupResultPanelPageHandoff() {
+    const resultPanelEl = document.querySelector("[data-result-panel-main]");
+    if (!resultPanelEl) {
+      return;
+    }
+
+    const desktopQuery = window.matchMedia("(min-width: 921px)");
+    const handoffThreshold = 220;
+    let wheelDragAccum = 0;
+    let wheelResetTimer = 0;
+    let touchLastY = null;
+    let touchDragAccum = 0;
+
+    const resetWheelAccum = () => {
+      wheelDragAccum = 0;
+      if (wheelResetTimer) {
+        window.clearTimeout(wheelResetTimer);
+        wheelResetTimer = 0;
+      }
+    };
+
+    const scheduleWheelReset = () => {
+      if (wheelResetTimer) {
+        window.clearTimeout(wheelResetTimer);
+      }
+      wheelResetTimer = window.setTimeout(() => {
+        wheelDragAccum = 0;
+        wheelResetTimer = 0;
+      }, 180);
+    };
+
+    const pageBottom = () => Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
+    const remainingPageScroll = () => Math.max(0, pageBottom() - window.scrollY);
+    const pageNeedsMoreScroll = () => desktopQuery.matches && remainingPageScroll() > 8;
+    const jumpPageToBottom = () => {
+      const target = pageBottom();
+      if (target <= window.scrollY + 8) {
+        return;
+      }
+      window.scrollTo({ top: target, behavior: "smooth" });
+    };
+
+    resultPanelEl.addEventListener("wheel", (event) => {
+      if (!desktopQuery.matches) {
+        resetWheelAccum();
+        return;
+      }
+
+      if (event.deltaY <= 0) {
+        resetWheelAccum();
+        return;
+      }
+
+      if (!pageNeedsMoreScroll()) {
+        resetWheelAccum();
+        return;
+      }
+
+      event.preventDefault();
+      const moveAmount = Math.min(event.deltaY, remainingPageScroll());
+      if (moveAmount > 0) {
+        window.scrollBy({ top: moveAmount, behavior: "auto" });
+      }
+
+      wheelDragAccum += Math.max(0, event.deltaY);
+      if (wheelDragAccum >= handoffThreshold) {
+        jumpPageToBottom();
+        resetWheelAccum();
+        return;
+      }
+      scheduleWheelReset();
+    }, { passive: false });
+
+    resultPanelEl.addEventListener("touchstart", (event) => {
+      if (!desktopQuery.matches || !event.touches.length) {
+        touchLastY = null;
+        touchDragAccum = 0;
+        return;
+      }
+      touchLastY = event.touches[0].clientY;
+      touchDragAccum = 0;
+    }, { passive: true });
+
+    resultPanelEl.addEventListener("touchmove", (event) => {
+      if (!desktopQuery.matches || !pageNeedsMoreScroll() || !event.touches.length || touchLastY === null) {
+        return;
+      }
+
+      const currentY = event.touches[0].clientY;
+      const delta = touchLastY - currentY;
+      touchLastY = currentY;
+
+      if (delta <= 0) {
+        touchDragAccum = 0;
+        return;
+      }
+
+      event.preventDefault();
+      const moveAmount = Math.min(delta, remainingPageScroll());
+      if (moveAmount > 0) {
+        window.scrollBy({ top: moveAmount, behavior: "auto" });
+      }
+
+      touchDragAccum += delta;
+      if (touchDragAccum >= handoffThreshold) {
+        jumpPageToBottom();
+        touchDragAccum = 0;
+      }
+    }, { passive: false });
+
+    ["touchend", "touchcancel"].forEach((eventName) => {
+      resultPanelEl.addEventListener(eventName, () => {
+        touchLastY = null;
+        touchDragAccum = 0;
+      }, { passive: true });
     });
   }
 
@@ -517,4 +751,5 @@
 
   setupDropzones();
   setupPdfViewerSwitcher();
+  setupResultPanelPageHandoff();
 })();

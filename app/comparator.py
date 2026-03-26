@@ -98,11 +98,19 @@ def _append_second_pass_notes(notes: list[str], item: ParsedItem) -> None:
     applied_fields = [field for field in review.get("applied_fields", []) if field]
     confidence = review.get("confidence")
     evidence = review.get("evidence")
+    input_mode = review.get("input_mode")
+    batch_error = review.get("batch_error")
 
     if issues:
         notes.append("2차 AI 재검증 사유: " + " / ".join(issues))
     if focus_fields:
         notes.append("2차 AI 재검증 대상: " + ", ".join(_field_label(field) for field in focus_fields))
+    if input_mode == "pdf_plus_text":
+        notes.append("2차 AI 재검증 입력: excerpt_text + 이미지 제거 PDF 페이지")
+    elif input_mode == "text_only_fallback":
+        notes.append("2차 AI 재검증 입력: excerpt_text (PDF 보강 실패 후 폴백)")
+    elif input_mode == "text_only":
+        notes.append("2차 AI 재검증 입력: excerpt_text")
     if applied_fields:
         notes.append("2차 AI 재검증 반영: " + ", ".join(_field_label(field) for field in applied_fields))
     else:
@@ -111,6 +119,8 @@ def _append_second_pass_notes(notes: list[str], item: ParsedItem) -> None:
         notes.append(f"2차 AI 신뢰도: {float(confidence):.2f}")
     if evidence:
         notes.append(f"2차 AI 근거 텍스트: {evidence}")
+    if batch_error and input_mode == "text_only_fallback":
+        notes.append(f"PDF 보강 실패 사유: {batch_error}")
 
 
 def _build_context(index: int, item: ParsedItem, master_df, region: str) -> Dict[str, Any]:

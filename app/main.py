@@ -20,6 +20,31 @@ from .settings import LAST_INSPECTION_PDF_DIR, OPENAI_MODEL, TEMP_DIR
 app = FastAPI(title="Don't Cry, Oh!")
 templates = Jinja2Templates(directory=str(Path(__file__).resolve().parent / "templates"))
 
+
+def _price_text(value):
+    if value is None or value == "" or isinstance(value, bool):
+        return "-"
+    if isinstance(value, (int, float)):
+        return f"{int(round(float(value))):,}"
+    raw = str(value).strip()
+    if not raw:
+        return "-"
+    try:
+        number = float(raw.replace(",", ""))
+    except Exception:
+        return raw
+    if number.is_integer():
+        return f"{int(number):,}"
+    return f"{number:,}"
+
+
+def _is_price_column(column_name):
+    return str(column_name or "").endswith("_price")
+
+
+templates.env.globals["price_text"] = _price_text
+templates.env.globals["is_price_column"] = _is_price_column
+
 static_dir = Path(__file__).resolve().parent / "static"
 if static_dir.exists():
     app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")

@@ -1,6 +1,5 @@
 import json
 import re
-from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 import fitz
@@ -8,7 +7,8 @@ from rapidfuzz import fuzz
 
 from . import data_manager
 from .models import ParsedItem, PriceSet
-from .settings import OPENAI_API_KEY, OPENAI_MODEL, OPENAI_TIMEOUT_SECONDS, PDF_TEXT_SNIPPET_LIMIT, TEMP_DIR
+from .pdf_assets import prepare_pdf_for_ai as _prepare_pdf_for_ai
+from .settings import OPENAI_API_KEY, OPENAI_MODEL, OPENAI_TIMEOUT_SECONDS, PDF_TEXT_SNIPPET_LIMIT
 
 try:
     from openai import OpenAI
@@ -89,15 +89,7 @@ def _clip_text(text: str, limit: int = PDF_TEXT_SNIPPET_LIMIT) -> str:
 
 
 def prepare_pdf_for_ai(input_pdf_path: str) -> str:
-    """
-    AI에는 PDF 바이너리 대신 텍스트 기반 분석만 전달한다.
-    별도로 최적화한 복사본 PDF를 만들어 보관하지만 실제 텍스트 추출은 원본 PDF에서 수행한다.
-    """
-    src = fitz.open(input_pdf_path)
-    out_path = Path(TEMP_DIR) / f"{Path(input_pdf_path).stem}_optimized.pdf"
-    src.save(str(out_path), garbage=4, deflate=True, clean=True)
-    src.close()
-    return str(out_path)
+    return _prepare_pdf_for_ai(input_pdf_path)
 
 
 def _name_similarity(line: str, row: dict) -> float:
