@@ -11,7 +11,7 @@ STATUS_REVIEW = "확인필요"
 
 FIELD_LABELS = {
     "spec_price": "규격단가",
-    "kg_price": "KG단가",
+    "kg_price": "KG/L단가",
     "unit_price": "개당단가",
     "spec_text": "규격",
 }
@@ -53,9 +53,12 @@ def _problem_messages(
     pdf_prices: Dict[str, Optional[int]],
     expected_prices: Dict[str, Optional[int]],
     region: str,
+    pdf_spec: str = "",
+    master_spec: Optional[str] = None,
 ) -> tuple[list[str], list[str]]:
     problems: list[str] = []
     focus_fields: list[str] = []
+    measure_label = data_manager.measure_price_label(pdf_spec, master_spec)
 
     if pdf_prices["spec_price"] is None:
         if expected_prices["spec_price"] is not None:
@@ -65,13 +68,13 @@ def _problem_messages(
         problems.append("규격단가가 기준 데이터와 다릅니다.")
         focus_fields.append("spec_price")
 
-    if region == "수도권":
+    if region == data_manager.REGION_SU:
         if pdf_prices["kg_price"] is None:
             if expected_prices["kg_price"] is not None:
-                problems.append("KG단가를 PDF에서 찾지 못했습니다.")
+                problems.append(f"{measure_label}를 PDF에서 찾지 못했습니다.")
                 focus_fields.append("kg_price")
         elif expected_prices["kg_price"] is not None and not _same(pdf_prices["kg_price"], expected_prices["kg_price"]):
-            problems.append("KG단가가 기준 데이터와 다릅니다.")
+            problems.append(f"{measure_label}가 기준 데이터와 다릅니다.")
             focus_fields.append("kg_price")
 
     if pdf_prices["unit_price"] is None:
@@ -142,7 +145,7 @@ def _build_context(index: int, item: ParsedItem, master_df, region: str) -> Dict
 
     if not row:
         if item.ingredient_content:
-            notes.append(f"원재료/함량: {item.ingredient_content}")
+            notes.append(f"원재료 함량: {item.ingredient_content}")
         if item.evidence_text:
             notes.append(f"AI 근거 텍스트: {item.evidence_text}")
         _append_second_pass_notes(notes, item)
@@ -181,13 +184,19 @@ def _build_context(index: int, item: ParsedItem, master_df, region: str) -> Dict
             expected_prices["unit_price"] = _apply_discount(expected_prices["unit_price"], item.discount_rate)
             status = STATUS_DISCOUNT
         else:
-            notes.append("할인율 수치는 없고 할인 문구만 있어 안내로 표시합니다.")
+            notes.append("할인율 수치가 없고 할인 문구만 있어 안내로만 표시합니다.")
             status = STATUS_DISCOUNT
 
-    problems, focus_fields = _problem_messages(pdf_prices, expected_prices, region)
+    problems, focus_fields = _problem_messages(
+        pdf_prices,
+        expected_prices,
+        region,
+        pdf_spec=item.spec_text,
+        master_spec=master["spec_text"],
+    )
     notes.append(f"매칭 점수: {float(score):.1f}")
     if item.ingredient_content:
-        notes.append(f"원재료/함량: {item.ingredient_content}")
+        notes.append(f"원재료 함량: {item.ingredient_content}")
     if item.evidence_text:
         notes.append(f"AI 근거 텍스트: {item.evidence_text}")
     _append_second_pass_notes(notes, item)

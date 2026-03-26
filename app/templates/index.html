@@ -9,6 +9,7 @@
   {% set spec_price_issue = is_error and row.master_prices.spec_price is not none and row.pdf_prices.spec_price != row.master_prices.spec_price %}
   {% set kg_price_issue = is_error and row.master_prices.kg_price is not none and row.pdf_prices.kg_price != row.master_prices.kg_price %}
   {% set unit_price_issue = is_error and row.master_prices.unit_price is not none and row.pdf_prices.unit_price != row.master_prices.unit_price %}
+  {% set measure_label = measure_price_label(row.pdf_spec, row.master_spec) %}
   {% set issue_ns = namespace(count=0) %}
   {% if missing_master %}{% set issue_ns.count = issue_ns.count + 1 %}{% endif %}
   {% if spec_issue %}{% set issue_ns.count = issue_ns.count + 1 %}{% endif %}
@@ -64,7 +65,7 @@
               <strong class="price-card-value">{{ row.pdf_prices.spec_price if row.pdf_prices.spec_price is not none else '-' }}</strong>
             </div>
             <div class="price-card-line {% if kg_price_issue %}is-error{% endif %}">
-              <span class="price-card-key">KG단가</span>
+              <span class="price-card-key">{{ measure_label }}</span>
               <strong class="price-card-value">{{ row.pdf_prices.kg_price if row.pdf_prices.kg_price is not none else '-' }}</strong>
             </div>
             <div class="price-card-line {% if unit_price_issue %}is-error{% endif %}">
@@ -95,7 +96,7 @@
               <strong class="price-card-value">{{ row.master_prices.spec_price if row.master_prices.spec_price is not none else '-' }}</strong>
             </div>
             <div class="price-card-line {% if kg_price_issue %}is-error{% endif %}">
-              <span class="price-card-key">KG단가</span>
+              <span class="price-card-key">{{ measure_label }}</span>
               <strong class="price-card-value">{{ row.master_prices.kg_price if row.master_prices.kg_price is not none else '-' }}</strong>
             </div>
             <div class="price-card-line {% if unit_price_issue %}is-error{% endif %}">
@@ -122,7 +123,7 @@
             {% if missing_master %}<span class="remark-chip is-error">상품 매칭 실패</span>{% endif %}
             {% if spec_issue %}<span class="remark-chip is-error">규격 차이</span>{% endif %}
             {% if spec_price_issue %}<span class="remark-chip is-error">규격단가 오류</span>{% endif %}
-            {% if kg_price_issue %}<span class="remark-chip is-error">KG단가 오류</span>{% endif %}
+            {% if kg_price_issue %}<span class="remark-chip is-error">{{ measure_label }} 오류</span>{% endif %}
             {% if unit_price_issue %}<span class="remark-chip is-error">개당단가 오류</span>{% endif %}
             {% if not issue_ns.count %}<span class="remark-chip">오류 없음</span>{% endif %}
           </div>
@@ -134,7 +135,7 @@
               {% if missing_master %}<div class="remark-alert">기준 데이터에서 상품 매칭을 찾지 못했습니다.</div>{% endif %}
               {% if spec_issue %}<div class="remark-alert">PDF 규격과 기준 규격이 다릅니다.</div>{% endif %}
               {% if spec_price_issue %}<div class="remark-alert">규격단가가 기준 데이터와 다릅니다.</div>{% endif %}
-              {% if kg_price_issue %}<div class="remark-alert">KG단가가 없거나 기준 데이터와 다릅니다.</div>{% endif %}
+              {% if kg_price_issue %}<div class="remark-alert">{{ measure_label }}가 없거나 기준 데이터와 다릅니다.</div>{% endif %}
               {% if unit_price_issue %}<div class="remark-alert">개당단가가 없거나 기준 데이터와 다릅니다.</div>{% endif %}
             </div>
           {% endif %}

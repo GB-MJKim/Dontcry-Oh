@@ -72,6 +72,7 @@
             {% set spec_price_issue = row.master_prices.spec_price is not none and row.pdf_prices.spec_price != row.master_prices.spec_price %}
             {% set kg_price_issue = row.master_prices.kg_price is not none and row.pdf_prices.kg_price != row.master_prices.kg_price %}
             {% set unit_price_issue = row.master_prices.unit_price is not none and row.pdf_prices.unit_price != row.master_prices.unit_price %}
+            {% set measure_label = measure_price_label(row.pdf_spec, row.master_spec) %}
             {% set issue_ns = namespace(count=0) %}
             {% if missing_master %}{% set issue_ns.count = issue_ns.count + 1 %}{% endif %}
             {% if spec_issue %}{% set issue_ns.count = issue_ns.count + 1 %}{% endif %}
@@ -135,7 +136,7 @@
                     {% if missing_master %}<span class="remark-chip is-error">&#49345;&#54408; &#47588;&#52845; &#49892;&#54056;</span>{% endif %}
                     {% if spec_issue %}<span class="remark-chip is-error">&#44508;&#44201; &#52264;&#51060;</span>{% endif %}
                     {% if spec_price_issue %}<span class="remark-chip is-error">&#44508;&#44201;&#45800;&#44032; &#50724;&#47448;</span>{% endif %}
-                    {% if kg_price_issue %}<span class="remark-chip is-error">KG &#45800;&#44032; &#50724;&#47448;</span>{% endif %}
+                    {% if kg_price_issue %}<span class="remark-chip is-error">{{ measure_label }} &#50724;&#47448;</span>{% endif %}
                     {% if unit_price_issue %}<span class="remark-chip is-error">&#44060;&#45817;&#45800;&#44032; &#50724;&#47448;</span>{% endif %}
                     {% if not issue_ns.count %}<span class="remark-chip">&#47700;&#47784; &#54869;&#51064;</span>{% endif %}
                   </div>
@@ -165,7 +166,7 @@
                         <strong class="price-card-value">{{ price_text(row.pdf_prices.spec_price) }}</strong>
                       </div>
                       <div class="price-card-line {% if kg_price_issue %}is-error{% endif %}">
-                        <span class="price-card-key">KG &#45800;&#44032;</span>
+                        <span class="price-card-key">{{ measure_label }}</span>
                         <strong class="price-card-value">{{ price_text(row.pdf_prices.kg_price) }}</strong>
                       </div>
                       <div class="price-card-line {% if unit_price_issue %}is-error{% endif %}">
@@ -202,7 +203,7 @@
                         <strong class="price-card-value">{{ price_text(row.master_prices.spec_price) }}</strong>
                       </div>
                       <div class="price-card-line {% if kg_price_issue %}is-error{% endif %}">
-                        <span class="price-card-key">KG &#45800;&#44032;</span>
+                        <span class="price-card-key">{{ measure_label }}</span>
                         <strong class="price-card-value">{{ price_text(row.master_prices.kg_price) }}</strong>
                       </div>
                       <div class="price-card-line {% if unit_price_issue %}is-error{% endif %}">
@@ -223,7 +224,7 @@
                       {% if missing_master %}<span class="remark-chip is-error">&#49345;&#54408; &#47588;&#52845; &#49892;&#54056;</span>{% endif %}
                       {% if spec_issue %}<span class="remark-chip is-error">&#44508;&#44201; &#52264;&#51060;</span>{% endif %}
                       {% if spec_price_issue %}<span class="remark-chip is-error">&#44508;&#44201;&#45800;&#44032; &#50724;&#47448;</span>{% endif %}
-                      {% if kg_price_issue %}<span class="remark-chip is-error">KG &#45800;&#44032; &#50724;&#47448;</span>{% endif %}
+                      {% if kg_price_issue %}<span class="remark-chip is-error">{{ measure_label }} &#50724;&#47448;</span>{% endif %}
                       {% if unit_price_issue %}<span class="remark-chip is-error">&#44060;&#45817;&#45800;&#44032; &#50724;&#47448;</span>{% endif %}
                       {% if not issue_ns.count %}<span class="remark-chip">&#52280;&#44256; &#47700;&#47784;</span>{% endif %}
                     </div>
@@ -235,7 +236,7 @@
                         {% if missing_master %}<div class="remark-alert">&#44592;&#51456; &#45936;&#51060;&#53552;&#50640;&#49436; &#49345;&#54408;&#51012; &#52286;&#51648; &#47803;&#54664;&#49845;&#45768;&#45796;.</div>{% endif %}
                         {% if spec_issue %}<div class="remark-alert">PDF &#44508;&#44201;&#44284; &#44592;&#51456; &#44508;&#44201;&#51060; &#45796;&#47493;&#45768;&#45796;.</div>{% endif %}
                         {% if spec_price_issue %}<div class="remark-alert">&#44508;&#44201;&#45800;&#44032;&#44032; &#44592;&#51456; &#45936;&#51060;&#53552;&#50752; &#45796;&#47493;&#45768;&#45796;.</div>{% endif %}
-                        {% if kg_price_issue %}<div class="remark-alert">KG &#45800;&#44032;&#44032; &#44592;&#51456; &#45936;&#51060;&#53552;&#50752; &#45796;&#47493;&#45768;&#45796;.</div>{% endif %}
+                        {% if kg_price_issue %}<div class="remark-alert">{{ measure_label }}&#44032; &#44592;&#51456; &#45936;&#51060;&#53552;&#50752; &#45796;&#47493;&#45768;&#45796;.</div>{% endif %}
                         {% if unit_price_issue %}<div class="remark-alert">&#44060;&#45817;&#45800;&#44032;&#44032; &#44592;&#51456; &#45936;&#51060;&#53552;&#50752; &#45796;&#47493;&#45768;&#45796;.</div>{% endif %}
                       </div>
                     {% endif %}

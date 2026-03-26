@@ -58,6 +58,7 @@ def _base_context(request: Request) -> dict:
         "master_count": summary["count"],
         "log_count": log_count,
         "normalize_spec": data_manager.normalize_spec,
+        "measure_price_label": data_manager.measure_price_label,
         "columns": summary["columns"],
         "rows": summary["rows"][:20],
         "results": None,

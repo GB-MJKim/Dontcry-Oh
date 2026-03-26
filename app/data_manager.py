@@ -47,6 +47,7 @@ EXCLUDE_KEYWORDS = [
 ]
 
 CATALOG_CACHE: Optional[List[dict]] = None
+LIQUID_SPEC_PATTERN = re.compile(r"\d+(?:\.\d+)?\s*(?:ml|l)\b", re.I)
 
 
 def _safe_str(value) -> str:
@@ -258,6 +259,18 @@ def normalize_name(text: str) -> str:
 
 def normalize_spec(text: str) -> str:
     return _normalize_spec(text)
+
+
+def is_liquid_spec(*specs: Optional[str]) -> bool:
+    for spec in specs:
+        value = _safe_str(spec)
+        if value and LIQUID_SPEC_PATTERN.search(value):
+            return True
+    return False
+
+
+def measure_price_label(pdf_spec: Optional[str] = "", master_spec: Optional[str] = "") -> str:
+    return "L단가" if is_liquid_spec(pdf_spec, master_spec) else "KG단가"
 
 
 def _containment_bonus(a: str, b: str) -> float:

@@ -1968,7 +1968,9 @@ tbody tr:last-child td {
   position: fixed;
   right: 20px;
   bottom: 20px;
-  width: min(390px, calc(100vw - 32px));
+  width: min(430px, calc(100vw - 32px));
+  height: auto;
+  max-height: calc(100vh - 35px);
   padding: 18px;
   border-radius: 24px;
   background: rgba(28, 21, 18, 0.94);
@@ -1979,6 +1981,7 @@ tbody tr:last-child td {
   pointer-events: none;
   transition: opacity 0.22s ease, transform 0.22s ease;
   z-index: 1200;
+  overflow-y: auto;
 }
 
 .loading-media {
@@ -2009,7 +2012,8 @@ tbody tr:last-child td {
 
 .loading-media-frame-wrap {
   position: relative;
-  width: min(220px, 100%);
+  width: min(270px, 100%);
+  aspect-ratio: 9 / 16;
   margin: 0 auto;
   overflow: hidden;
   border-radius: 18px;
@@ -2018,9 +2022,7 @@ tbody tr:last-child td {
 }
 
 .loading-media-frame-wrap::before {
-  content: "";
-  display: block;
-  padding-top: 177.78%;
+  content: none;
 }
 
 .loading-media-frame {
