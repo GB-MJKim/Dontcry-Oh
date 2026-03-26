@@ -18,6 +18,24 @@
   <div class="site-shell">
     <div class="loading-backdrop" id="loadingBackdrop"></div>
     <div class="loading-float" id="loadingFloat" aria-live="polite" aria-hidden="true">
+      <div class="loading-media" id="loadingMedia">
+        <div class="loading-media-head">
+          <span class="loading-media-kicker">Random Shorts</span>
+          <a class="loading-media-link" id="loadingMediaLink" href="https://www.youtube.com/@econenia/shorts" target="_blank" rel="noopener noreferrer">채널 열기</a>
+        </div>
+        <div class="loading-media-frame-wrap">
+          <iframe
+            id="loadingMediaFrame"
+            class="loading-media-frame"
+            src=""
+            title="Don't Cry, Oh! 랜덤 쇼츠"
+            loading="lazy"
+            referrerpolicy="strict-origin-when-cross-origin"
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+            allowfullscreen
+          ></iframe>
+        </div>
+      </div>
       <div class="loading-head">
         <div>
           <p class="loading-title" id="loadingTitle">처리 준비 중</p>
@@ -25,11 +43,29 @@
         </div>
         <div class="loading-spinner" aria-hidden="true"></div>
       </div>
-      <div class="loading-progress">
-        <div class="loading-progress-bar" id="loadingProgressBar"></div>
+      <div class="loading-progress-stack">
+        <div class="loading-progress-group">
+          <div class="loading-progress-head">
+            <span class="loading-progress-label">개별 진행</span>
+            <span class="loading-progress-caption" id="loadingCurrentFileCaption">파일 준비 중</span>
+          </div>
+          <div class="loading-progress">
+            <div class="loading-progress-bar" id="loadingProgressBar"></div>
+          </div>
+        </div>
+        <div class="loading-progress-group">
+          <div class="loading-progress-head">
+            <span class="loading-progress-label">전체 파일 진행</span>
+            <span class="loading-progress-caption" id="loadingOverallCaption">0 / 0 파일</span>
+          </div>
+          <div class="loading-progress loading-progress-overall">
+            <div class="loading-progress-bar loading-progress-bar-overall" id="loadingOverallProgressBar"></div>
+          </div>
+        </div>
       </div>
       <div class="loading-meta">
-        <span id="loadingPercent">0%</span>
+        <span id="loadingPercent">개별 0%</span>
+        <span id="loadingOverallPercent">전체 0%</span>
         <span id="loadingElapsed">0초</span>
       </div>
       <ul class="loading-steps" id="loadingSteps"></ul>
@@ -39,7 +75,9 @@
       <div class="container">
         <div class="topbar-inner">
           <a href="/" class="brand">
-            <div class="brand-mark">D</div>
+            <div class="brand-mark">
+              <img src="{{ request.url_for('static', path='favicon/favicon-32x32.png') }}" alt="Don't Cry, Oh! 로고">
+            </div>
             <div class="brand-copy">
               <p class="brand-name">Don't Cry, Oh!</p>
               <p class="brand-tag">Nenia Price Inspector</p>
@@ -48,6 +86,7 @@
           <nav class="nav-links" aria-label="주요 메뉴">
             <a href="/" class="nav-link {% if active_page == 'home' %}active{% endif %}">검수 홈</a>
             <a href="/master" class="nav-link {% if active_page == 'master' %}active{% endif %}">기준 데이터 관리</a>
+            <a href="/logs" class="nav-link {% if active_page == 'logs' %}active{% endif %}">로그 데이터</a>
           </nav>
         </div>
       </div>

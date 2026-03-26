@@ -1,0 +1,19 @@
+services:
+  web:
+    build:
+      context: .
+    image: dontcry-oh:latest
+    container_name: dontcry-oh
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      HOST: 0.0.0.0
+      PORT: "${PORT:-8000}"
+      RELOAD: "false"
+    ports:
+      - "${PORT:-8000}:${PORT:-8000}"
+    volumes:
+      - ./data:/app/data
+      - ./cache:/app/cache
+      - ./temp:/app/temp

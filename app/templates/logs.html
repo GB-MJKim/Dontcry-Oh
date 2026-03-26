@@ -1,0 +1,283 @@
+{% extends "base.html" %}
+
+{% macro price_text(value) -%}
+  {{ "{:,}".format(value) if value is not none else "-" }}
+{%- endmacro %}
+
+{% block title %}Don't Cry, Oh! | &#47196;&#44536; &#45936;&#51060;&#53552;{% endblock %}
+
+{% block content %}
+  <section class="subhero">
+    <div>
+      <span class="eyebrow">Logs</span>
+      <h1 class="subhero-title">&#47196;&#44536; &#45936;&#51060;&#53552;</h1>
+      <p class="subhero-copy">
+        &#44160;&#49688; &#51473; &#50724;&#47448;&#44032; &#48156;&#49373;&#54664;&#45912; PDF&#50752; &#49345;&#54408; &#48708;&#44368; &#44208;&#44284;&#47484;
+        &#51339;&#51008; &#44592;&#48376; &#50836;&#50557; &#54805;&#53468;&#47196; &#47788;&#51200; &#48372;&#44256;, &#54596;&#50836;&#54620; &#54637;&#47785;&#47564;
+        &#54204;&#52432;&#49436; &#54869;&#51064;&#54624; &#49688; &#51080;&#44172; &#51221;&#47532;&#54664;&#49845;&#45768;&#45796;.
+      </p>
+    </div>
+    <div class="subhero-side">
+      <strong>{{ log_count }}</strong>
+      <span>&#45572;&#51201; &#50724;&#47448; &#47196;&#44536; &#49688;</span>
+    </div>
+  </section>
+
+  <section class="result-panel">
+    <div class="panel">
+      <div class="panel-header">
+        <div>
+          <span class="panel-kicker">History</span>
+          <h2 class="panel-title">&#50724;&#47448; &#47196;&#44536; &#47785;&#47197;</h2>
+          <p class="panel-copy">
+            &#44033; &#49345;&#54408;&#51012; &#44592;&#48376; &#50836;&#50557; &#52852;&#46300;&#47196; &#48372;&#44256;, &#49345;&#49464; &#44508;&#44201; &#48143; &#45800;&#44032;
+            &#48708;&#44368;&#45716; &#54596;&#50836;&#54624; &#46412;&#47564; &#50676;&#50612; &#54869;&#51064;&#54624; &#49688; &#51080;&#49845;&#45768;&#45796;.
+          </p>
+        </div>
+      </div>
+
+      <form method="get" action="/logs" class="master-search-bar">
+        <div class="master-search-main">
+          <label class="field-label" for="log-search">&#44160;&#49353;</label>
+          <input
+            id="log-search"
+            type="text"
+            name="q"
+            value="{{ log_query }}"
+            class="master-search-input"
+            placeholder="PDF &#54028;&#51068;&#47749;, &#49345;&#54408;&#47749;, &#44428;&#50669;&#51004;&#47196; &#44160;&#49353;"
+          >
+        </div>
+        <input type="hidden" name="page" value="1">
+        <button type="submit" class="btn btn-primary master-search-button">&#44160;&#49353;</button>
+      </form>
+
+      <div class="master-table-meta">
+        <div class="master-table-count">
+          &#44160;&#49353; &#44208;&#44284; <strong>{{ log_filtered_count }}</strong>&#44148;
+          {% if log_filtered_count %}
+            <span class="master-table-range">&#54788;&#51116; {{ log_start_display }} - {{ log_end_display }}&#44148;</span>
+          {% endif %}
+        </div>
+        {% if log_query %}
+          <a href="/logs" class="btn btn-secondary master-clear-button">&#44160;&#49353; &#52488;&#44592;&#54868;</a>
+        {% endif %}
+      </div>
+
+      {% if log_rows %}
+        <div class="log-entry-list">
+          {% for row in log_rows %}
+            {% set missing_master = not row.product_name_master %}
+            {% set spec_issue = row.master_spec and normalize_spec(row.pdf_spec) != normalize_spec(row.master_spec) %}
+            {% set spec_price_issue = row.master_prices.spec_price is not none and row.pdf_prices.spec_price != row.master_prices.spec_price %}
+            {% set kg_price_issue = row.master_prices.kg_price is not none and row.pdf_prices.kg_price != row.master_prices.kg_price %}
+            {% set unit_price_issue = row.master_prices.unit_price is not none and row.pdf_prices.unit_price != row.master_prices.unit_price %}
+            {% set issue_ns = namespace(count=0) %}
+            {% if missing_master %}{% set issue_ns.count = issue_ns.count + 1 %}{% endif %}
+            {% if spec_issue %}{% set issue_ns.count = issue_ns.count + 1 %}{% endif %}
+            {% if spec_price_issue %}{% set issue_ns.count = issue_ns.count + 1 %}{% endif %}
+            {% if kg_price_issue %}{% set issue_ns.count = issue_ns.count + 1 %}{% endif %}
+            {% if unit_price_issue %}{% set issue_ns.count = issue_ns.count + 1 %}{% endif %}
+
+            <details class="log-entry-card">
+              <summary class="log-entry-summary">
+                <div class="log-entry-topbar">
+                  <div class="log-entry-meta-row">
+                    <span class="status-badge badge-error">{{ row.status }}</span>
+                    <span class="log-region-pill">{{ row.region }}</span>
+                    <span class="log-entry-meta-text">{{ row.inspected_date }} {{ row.inspected_time }}</span>
+                  </div>
+                  <div class="log-entry-summary-tools">
+                    <span class="log-entry-score">&#47588;&#52845; {{ "%.1f"|format(row.match_score) }}</span>
+                    <span class="log-entry-toggle">&#49345;&#49464; &#48372;&#44592;</span>
+                  </div>
+                </div>
+
+                <div class="log-entry-head">
+                  <div class="log-entry-file">
+                    <span class="log-entry-kicker">PDF</span>
+                    <strong class="log-entry-file-name">{{ row.pdf_filename }}</strong>
+                  </div>
+
+                  <div class="log-entry-names">
+                    <div class="log-entry-name-block">
+                      <span class="log-entry-kicker">PDF &#49345;&#54408;</span>
+                      <strong class="log-entry-primary">{{ row.product_name_pdf or "-" }}</strong>
+                    </div>
+
+                    <div class="log-entry-arrow" aria-hidden="true">&#8594;</div>
+
+                    <div class="log-entry-name-block {% if missing_master %}is-error{% endif %}">
+                      <span class="log-entry-kicker">&#44592;&#51456; &#49345;&#54408;</span>
+                      <strong class="log-entry-primary">
+                        {% if row.product_name_master %}
+                          {{ row.product_name_master }}
+                        {% else %}
+                          &#47588;&#52845; &#49892;&#54056;
+                        {% endif %}
+                      </strong>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="log-entry-bottom">
+                  <div class="log-entry-issue-count">
+                    {% if issue_ns.count %}
+                      <strong>&#50724;&#47448; &#54252;&#51064;&#53944; {{ issue_ns.count }}&#44060;</strong>
+                      <span>&#52852;&#46300;&#47484; &#45572;&#47476;&#47732; &#48708;&#44368; &#49345;&#49464;&#47484; &#54869;&#51064;&#54624; &#49688; &#51080;&#49845;&#45768;&#45796;.</span>
+                    {% else %}
+                      <strong>&#44160;&#49688; &#47700;&#47784;</strong>
+                      <span>&#49345;&#49464; &#47700;&#47784;&#47484; &#50676;&#50612; &#54869;&#51064;&#54616;&#49464;&#50836;.</span>
+                    {% endif %}
+                  </div>
+
+                  <div class="log-issue-tags">
+                    {% if missing_master %}<span class="remark-chip is-error">&#49345;&#54408; &#47588;&#52845; &#49892;&#54056;</span>{% endif %}
+                    {% if spec_issue %}<span class="remark-chip is-error">&#44508;&#44201; &#52264;&#51060;</span>{% endif %}
+                    {% if spec_price_issue %}<span class="remark-chip is-error">&#44508;&#44201;&#45800;&#44032; &#50724;&#47448;</span>{% endif %}
+                    {% if kg_price_issue %}<span class="remark-chip is-error">KG &#45800;&#44032; &#50724;&#47448;</span>{% endif %}
+                    {% if unit_price_issue %}<span class="remark-chip is-error">&#44060;&#45817;&#45800;&#44032; &#50724;&#47448;</span>{% endif %}
+                    {% if not issue_ns.count %}<span class="remark-chip">&#47700;&#47784; &#54869;&#51064;</span>{% endif %}
+                  </div>
+                </div>
+              </summary>
+
+              <div class="log-entry-body">
+                <div class="result-compare-grid log-entry-compare-grid">
+                  <section class="compare-card compare-card-pdf">
+                    <div class="compare-card-head">
+                      <span class="compare-kicker">PDF</span>
+                      <h3>PDF &#52628;&#52636; &#51221;&#48372;</h3>
+                    </div>
+
+                    <div class="compare-main-name">{{ row.product_name_pdf or "-" }}</div>
+
+                    <div class="compare-info-list">
+                      <div class="compare-info-item {% if spec_issue %}is-error{% endif %}">
+                        <span class="compare-label">&#44508;&#44201;</span>
+                        <span class="compare-value">{{ row.pdf_spec or "-" }}</span>
+                      </div>
+                    </div>
+
+                    <div class="price-card-grid">
+                      <div class="price-card-line {% if spec_price_issue %}is-error{% endif %}">
+                        <span class="price-card-key">&#44508;&#44201;&#45800;&#44032;</span>
+                        <strong class="price-card-value">{{ price_text(row.pdf_prices.spec_price) }}</strong>
+                      </div>
+                      <div class="price-card-line {% if kg_price_issue %}is-error{% endif %}">
+                        <span class="price-card-key">KG &#45800;&#44032;</span>
+                        <strong class="price-card-value">{{ price_text(row.pdf_prices.kg_price) }}</strong>
+                      </div>
+                      <div class="price-card-line {% if unit_price_issue %}is-error{% endif %}">
+                        <span class="price-card-key">&#44060;&#45817;&#45800;&#44032;</span>
+                        <strong class="price-card-value">{{ price_text(row.pdf_prices.unit_price) }}</strong>
+                      </div>
+                    </div>
+                  </section>
+
+                  <section class="compare-card compare-card-master {% if missing_master %}is-error{% endif %}">
+                    <div class="compare-card-head">
+                      <span class="compare-kicker">&#44592;&#51456; &#45936;&#51060;&#53552;</span>
+                      <h3>&#44592;&#51456; &#48708;&#44368; &#51221;&#48372;</h3>
+                    </div>
+
+                    <div class="compare-main-name">
+                      {% if row.product_name_master %}
+                        {{ row.product_name_master }}
+                      {% else %}
+                        &#47588;&#52845;&#46108; &#44592;&#51456; &#49345;&#54408;&#51060; &#50630;&#49845;&#45768;&#45796;
+                      {% endif %}
+                    </div>
+
+                    <div class="compare-info-list">
+                      <div class="compare-info-item {% if spec_issue or missing_master %}is-error{% endif %}">
+                        <span class="compare-label">&#44508;&#44201;</span>
+                        <span class="compare-value">{{ row.master_spec or "-" }}</span>
+                      </div>
+                    </div>
+
+                    <div class="price-card-grid">
+                      <div class="price-card-line {% if spec_price_issue or missing_master %}is-error{% endif %}">
+                        <span class="price-card-key">&#44508;&#44201;&#45800;&#44032;</span>
+                        <strong class="price-card-value">{{ price_text(row.master_prices.spec_price) }}</strong>
+                      </div>
+                      <div class="price-card-line {% if kg_price_issue %}is-error{% endif %}">
+                        <span class="price-card-key">KG &#45800;&#44032;</span>
+                        <strong class="price-card-value">{{ price_text(row.master_prices.kg_price) }}</strong>
+                      </div>
+                      <div class="price-card-line {% if unit_price_issue %}is-error{% endif %}">
+                        <span class="price-card-key">&#44060;&#45817;&#45800;&#44032;</span>
+                        <strong class="price-card-value">{{ price_text(row.master_prices.unit_price) }}</strong>
+                      </div>
+                    </div>
+                  </section>
+                </div>
+
+                <details class="remark-details {% if issue_ns.count %}has-issues{% endif %}">
+                  <summary class="remark-summary">
+                    <div class="remark-summary-main">
+                      <span class="remark-summary-title">&#48708;&#44256;</span>
+                      <span class="remark-summary-copy">&#47700;&#47784; {{ row.notes|length }}&#44148; &#48372;&#44592;</span>
+                    </div>
+                    <div class="remark-chip-row">
+                      {% if missing_master %}<span class="remark-chip is-error">&#49345;&#54408; &#47588;&#52845; &#49892;&#54056;</span>{% endif %}
+                      {% if spec_issue %}<span class="remark-chip is-error">&#44508;&#44201; &#52264;&#51060;</span>{% endif %}
+                      {% if spec_price_issue %}<span class="remark-chip is-error">&#44508;&#44201;&#45800;&#44032; &#50724;&#47448;</span>{% endif %}
+                      {% if kg_price_issue %}<span class="remark-chip is-error">KG &#45800;&#44032; &#50724;&#47448;</span>{% endif %}
+                      {% if unit_price_issue %}<span class="remark-chip is-error">&#44060;&#45817;&#45800;&#44032; &#50724;&#47448;</span>{% endif %}
+                      {% if not issue_ns.count %}<span class="remark-chip">&#52280;&#44256; &#47700;&#47784;</span>{% endif %}
+                    </div>
+                  </summary>
+
+                  <div class="remark-body">
+                    {% if issue_ns.count %}
+                      <div class="remark-alert-list">
+                        {% if missing_master %}<div class="remark-alert">&#44592;&#51456; &#45936;&#51060;&#53552;&#50640;&#49436; &#49345;&#54408;&#51012; &#52286;&#51648; &#47803;&#54664;&#49845;&#45768;&#45796;.</div>{% endif %}
+                        {% if spec_issue %}<div class="remark-alert">PDF &#44508;&#44201;&#44284; &#44592;&#51456; &#44508;&#44201;&#51060; &#45796;&#47493;&#45768;&#45796;.</div>{% endif %}
+                        {% if spec_price_issue %}<div class="remark-alert">&#44508;&#44201;&#45800;&#44032;&#44032; &#44592;&#51456; &#45936;&#51060;&#53552;&#50752; &#45796;&#47493;&#45768;&#45796;.</div>{% endif %}
+                        {% if kg_price_issue %}<div class="remark-alert">KG &#45800;&#44032;&#44032; &#44592;&#51456; &#45936;&#51060;&#53552;&#50752; &#45796;&#47493;&#45768;&#45796;.</div>{% endif %}
+                        {% if unit_price_issue %}<div class="remark-alert">&#44060;&#45817;&#45800;&#44032;&#44032; &#44592;&#51456; &#45936;&#51060;&#53552;&#50752; &#45796;&#47493;&#45768;&#45796;.</div>{% endif %}
+                      </div>
+                    {% endif %}
+
+                    <ul class="notes notes-collapsible">
+                      {% for note in row.notes %}
+                        <li class="note-normal">{{ note }}</li>
+                      {% endfor %}
+                    </ul>
+                  </div>
+                </details>
+              </div>
+            </details>
+          {% endfor %}
+        </div>
+
+        <div class="master-pagination">
+          <form method="get" action="/logs" class="master-page-form">
+            <input type="hidden" name="q" value="{{ log_query }}">
+            <input type="hidden" name="page" value="{{ log_prev_page }}">
+            <button type="submit" class="master-page-button" {% if not log_has_prev %}disabled{% endif %}>&#51060;&#51204;</button>
+          </form>
+
+          <div class="master-page-list">
+            {% for number in log_page_numbers %}
+              <form method="get" action="/logs" class="master-page-form">
+                <input type="hidden" name="q" value="{{ log_query }}">
+                <input type="hidden" name="page" value="{{ number }}">
+                <button type="submit" class="master-page-button {% if number == log_page %}is-active{% endif %}">{{ number }}</button>
+              </form>
+            {% endfor %}
+          </div>
+
+          <form method="get" action="/logs" class="master-page-form">
+            <input type="hidden" name="q" value="{{ log_query }}">
+            <input type="hidden" name="page" value="{{ log_next_page }}">
+            <button type="submit" class="master-page-button" {% if not log_has_next %}disabled{% endif %}>&#45796;&#51020;</button>
+          </form>
+        </div>
+      {% else %}
+        <div class="empty-state">&#51200;&#51109;&#46108; &#50724;&#47448; &#47196;&#44536;&#44032; &#50630;&#49845;&#45768;&#45796;.</div>
+      {% endif %}
+    </div>
+  </section>
+{% endblock %}

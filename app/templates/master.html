@@ -8,13 +8,19 @@
       <span class="eyebrow">Master Data</span>
       <h1 class="subhero-title">기준 데이터 관리</h1>
       <p class="subhero-copy">
-        검수의 기준이 되는 엑셀 데이터를 이 페이지에서 관리합니다.
-        새 파일 업로드와 현재 데이터 미리보기를 한 화면에서 확인할 수 있습니다.
+        검수 기준이 되는 엑셀 데이터를 이 페이지에서 관리합니다.
+        업로드한 기준 데이터 전체를 검색하고 페이지 단위로 넘겨보면서 확인할 수 있습니다.
       </p>
     </div>
     <div class="subhero-side">
       <strong>{{ master_count }}</strong>
       <span>현재 등록된 기준 상품 수</span>
+      {% if master_source_date %}
+        <div class="subhero-side-meta">
+          <b>기준일</b>
+          <span>{{ master_source_date }}</span>
+        </div>
+      {% endif %}
     </div>
   </section>
 
@@ -37,42 +43,33 @@
         <button type="submit" class="btn btn-primary field-button">기준 데이터 업로드</button>
       </form>
 
-      <p class="footer-note">검수 화면에서는 업로드가 보이지 않도록 분리되어 있습니다.</p>
+      <p class="footer-note">업로드 후 아래 미리보기에서 바로 검색과 페이지 이동으로 전체 데이터를 확인할 수 있습니다.</p>
     </div>
 
     <div class="meta-grid">
       <div class="soft-card">
-        <span class="eyebrow">Guide</span>
-        <h3>권장 관리 방식</h3>
-        <div class="mini-list">
-          <div class="mini-item">
-            <div class="mini-dot"></div>
-            <div class="mini-copy">
-              <strong>최신 파일만 유지</strong>
-              <span>검수 전에는 최신 기준 엑셀이 올라와 있는지 먼저 확인해 주세요.</span>
-            </div>
-          </div>
-          <div class="mini-item">
-            <div class="mini-dot"></div>
-            <div class="mini-copy">
-              <strong>업로드 후 바로 검수</strong>
-              <span>기준 데이터 교체 뒤 홈으로 돌아가 바로 PDF를 검수하면 흐름이 깔끔합니다.</span>
-            </div>
-          </div>
-          <div class="mini-item">
-            <div class="mini-dot"></div>
-            <div class="mini-copy">
-              <strong>미리보기 확인</strong>
-              <span>아래 표에서 열 구성과 일부 행을 확인해 업로드 오류를 줄일 수 있습니다.</span>
-            </div>
-          </div>
-        </div>
+        <span class="eyebrow">Search</span>
+        <h3>이제 전체 데이터를 찾을 수 있습니다</h3>
+        <p>상품명, 코드, 규격 기준으로 검색하고 페이지를 넘기면서 모든 기준 데이터를 확인할 수 있습니다.</p>
+      </div>
+
+      <div class="soft-card">
+        <span class="eyebrow">Source</span>
+        <h3>현재 기준 파일 정보</h3>
+        {% if master_source_date %}
+          <p>기준일은 <strong>{{ master_source_date }}</strong> 입니다.</p>
+        {% else %}
+          <p>파일명에서 기준일을 찾지 못했습니다.</p>
+        {% endif %}
+        {% if master_source_filename %}
+          <p class="master-source-name">{{ master_source_filename }}</p>
+        {% endif %}
       </div>
 
       <div class="soft-card">
         <span class="eyebrow">Shortcut</span>
-        <h3>검수 화면으로 이동</h3>
-        <p>기준 데이터 확인이 끝났다면 바로 홈으로 돌아가 PDF 검수를 시작할 수 있습니다.</p>
+        <h3>검수 홈으로 이동</h3>
+        <p>기준 데이터 확인이 끝났다면 홈으로 돌아가 PDF 검수를 바로 시작할 수 있습니다.</p>
         <div style="margin-top: 16px;">
           <a href="/" class="btn btn-secondary">검수 홈으로 가기</a>
         </div>
@@ -86,8 +83,36 @@
         <div>
           <span class="panel-kicker">Preview</span>
           <h2 class="panel-title">기준 데이터 미리보기</h2>
-          <p class="panel-copy">현재 로드된 기준 데이터의 일부를 보여줍니다. 업로드 직후 구조 점검용으로 확인하면 좋습니다.</p>
+          <p class="panel-copy">검색과 페이지 이동으로 전체 기준 데이터를 확인할 수 있습니다.</p>
         </div>
+      </div>
+
+      <form method="get" action="/master" class="master-search-bar">
+        <div class="master-search-main">
+          <label class="field-label" for="master-search">검색</label>
+          <input
+            id="master-search"
+            type="text"
+            name="q"
+            value="{{ master_query }}"
+            class="master-search-input"
+            placeholder="상품명, 코드, 규격으로 검색"
+          >
+        </div>
+        <input type="hidden" name="page" value="1">
+        <button type="submit" class="btn btn-primary master-search-button">검색</button>
+      </form>
+
+      <div class="master-table-meta">
+        <div class="master-table-count">
+          검색 결과 <strong>{{ master_filtered_count }}</strong>건
+          {% if master_filtered_count %}
+            <span class="master-table-range">현재 {{ master_start_display }} - {{ master_end_display }}건</span>
+          {% endif %}
+        </div>
+        {% if master_query %}
+          <a href="/master" class="btn btn-secondary master-clear-button">검색 초기화</a>
+        {% endif %}
       </div>
 
       {% if rows %}
@@ -113,8 +138,32 @@
             </table>
           </div>
         </div>
+
+        <div class="master-pagination">
+          <form method="get" action="/master" class="master-page-form">
+            <input type="hidden" name="q" value="{{ master_query }}">
+            <input type="hidden" name="page" value="{{ master_prev_page }}">
+            <button type="submit" class="master-page-button" {% if not master_has_prev %}disabled{% endif %}>이전</button>
+          </form>
+
+          <div class="master-page-list">
+            {% for number in master_page_numbers %}
+              <form method="get" action="/master" class="master-page-form">
+                <input type="hidden" name="q" value="{{ master_query }}">
+                <input type="hidden" name="page" value="{{ number }}">
+                <button type="submit" class="master-page-button {% if number == master_page %}is-active{% endif %}">{{ number }}</button>
+              </form>
+            {% endfor %}
+          </div>
+
+          <form method="get" action="/master" class="master-page-form">
+            <input type="hidden" name="q" value="{{ master_query }}">
+            <input type="hidden" name="page" value="{{ master_next_page }}">
+            <button type="submit" class="master-page-button" {% if not master_has_next %}disabled{% endif %}>다음</button>
+          </form>
+        </div>
       {% else %}
-        <div class="empty-state">현재 불러온 기준 데이터가 없습니다.</div>
+        <div class="empty-state">조건에 맞는 기준 데이터가 없습니다.</div>
       {% endif %}
     </div>
   </section>
